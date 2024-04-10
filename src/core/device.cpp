@@ -138,7 +138,8 @@ static const char* kRequiredDeviceExtensions[] =
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 	VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
 	VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
-	VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME
+	VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
+	VK_EXT_MEMORY_BUDGET_EXTENSION_NAME
 };
 
 static bool isDeviceExtensionAvailable(
@@ -267,7 +268,6 @@ static VkDevice createDevice(
 	VkPhysicalDeviceVulkan12Features deviceFeatures12 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
 	deviceFeatures12.storageBuffer8BitAccess = VK_TRUE;
 	deviceFeatures12.uniformAndStorageBuffer8BitAccess = VK_TRUE;
-	deviceFeatures12.storagePushConstant8 = VK_TRUE;
 	deviceFeatures12.shaderFloat16 = VK_TRUE;
 	deviceFeatures12.shaderInt8 = VK_TRUE;
 	deviceFeatures12.drawIndirectCount = VK_TRUE;

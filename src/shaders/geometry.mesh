@@ -13,13 +13,14 @@ const uint kTriangleLoops = (3 * kMaxTrianglesPerMeshlet + 4 * kShaderGroupSizeN
 layout(local_size_x = kShaderGroupSizeNV) in;
 layout(triangles, max_vertices = kMaxVerticesPerMeshlet, max_primitives = kMaxTrianglesPerMeshlet) out;
 
-layout(binding = 0) readonly buffer PerDrawDataVector { PerDrawData perDrawDataVector[]; };
-layout(binding = 1) readonly buffer DrawCommands { DrawCommand drawCommands[]; };
-layout(binding = 2) readonly buffer Meshlets { Meshlet meshlets[]; };
-layout(binding = 3) readonly buffer Meshes { Mesh meshes[]; };
-layout(binding = 4) readonly buffer MeshletVertices { uint meshletVertices[]; };
-layout(binding = 5) readonly buffer MeshletTriangles { uint meshletTriangles[]; };
-layout(binding = 6) readonly buffer Vertices { Vertex vertices[]; };
+layout(binding = 0) uniform UniformBufferObject { PerFrameData perFrameData; };
+layout(binding = 1) readonly buffer PerDrawDataVector { PerDrawData perDrawDataVector[]; };
+layout(binding = 2) readonly buffer DrawCommands { DrawCommand drawCommands[]; };
+layout(binding = 3) readonly buffer Meshlets { Meshlet meshlets[]; };
+layout(binding = 4) readonly buffer Meshes { Mesh meshes[]; };
+layout(binding = 5) readonly buffer MeshletVertices { uint meshletVertices[]; };
+layout(binding = 6) readonly buffer MeshletTriangles { uint meshletTriangles[]; };
+layout(binding = 7) readonly buffer Vertices { Vertex vertices[]; };
 
 taskNV in Task
 {
@@ -28,26 +29,10 @@ taskNV in Task
 
 layout(location = 0) out vec3 outColor[];
 
-layout (push_constant) uniform block
-{
-    PerFrameData perFrameData;
-};
-
-vec3 getRandomColor(
-	uint _seed)
-{
-	uint hash = (_seed ^ 61) ^ (_seed >> 16);
-	hash = hash + (hash << 3);
-	hash = hash ^ (hash >> 4);
-	hash = hash * 0x27d4eb2d;
-	hash = hash ^ (hash >> 15);
-	return vec3(float(hash & 255),
-				float((hash >> 8) & 255),
-				float((hash >> 16) & 255)) / 255.0;
-}
-
 void main()
 {
+	// TODO-MILKRU: Implement backface and small triangle culling
+
 	uint groupIndex = gl_WorkGroupID.x;
 	uint groupThreadIndex = gl_LocalInvocationID.x;
 	uint meshletIndex = inTask.meshletIndices[groupIndex]; 
@@ -55,12 +40,8 @@ void main()
 	uint drawIndex = drawCommands[gl_DrawID].drawIndex;
 	PerDrawData perDrawData = perDrawDataVector[drawIndex];
 
-	Mesh mesh = meshes[perDrawData.meshIndex];
-	uint subsetIndex = drawCommands[gl_DrawID].subsetIndex;
-	MeshSubset subset = mesh.subsets[subsetIndex];
-
-	uint globalVertexOffset = subset.vertexOffset;
 	vec3 meshletColor = getRandomColor(meshletIndex);
+	uint globalVertexOffset = meshes[perDrawData.meshIndex].vertexOffset;
 
 	[[unroll]]
 	for (uint loopIndex = 0; loopIndex < kVertexLoops; ++loopIndex)
@@ -90,7 +71,7 @@ void main()
 
 		gl_MeshVerticesNV[localVertexIndex].gl_Position = perFrameData.projection * perFrameData.view * worldPosition;
 		
-		float shade = dot(normal, normalize(perFrameData.cameraPosition - worldPosition.xyz));
+		float shade = dot(normal, normalize(perFrameData.cameraPosition.xyz - worldPosition.xyz));
 		outColor[localVertexIndex] = shade * (0.5 * (meshletColor + 0.5 * normal + 0.5));
 	}
 

@@ -32,19 +32,13 @@ struct MeshLod
 	u32 meshletCount = 0;
 };
 
-struct MeshSubset
-{
-	u32 vertexOffset = 0;
-	u32 lodCount = 0;
-	MeshLod lods[kMaxMeshLods] = {};
-};
-
 struct Mesh
 {
+	u32 vertexOffset = 0;
 	f32 center[3] = {};
 	f32 radius = 0.0f;
-	u32 subsetCount = 0;
-	MeshSubset subsets[kMaxMeshSubsets] = {};
+	u32 lodCount = 0;
+	MeshLod lods[kMaxMeshLods] = {};
 };
 
 struct Geometry
@@ -69,12 +63,10 @@ struct GeometryBuffers
 };
 
 void loadMesh(
+	Geometry& _rGeometry,
 	const char* _pFilePath,
-	bool _bMeshShadingSupported,
-	_Out_ Geometry& _rGeometry);
+	bool _bMeshShadingSupported);
 
 GeometryBuffers createGeometryBuffers(
 	Device& _rDevice,
-	Geometry& _rGeometry,
-	u32 _meshCount,
-	const char** _meshPaths);
+	Geometry& _rGeometry);

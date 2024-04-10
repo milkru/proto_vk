@@ -12,20 +12,23 @@
 
 layout(local_size_x = kShaderGroupSizeNV) in;
 
-layout(binding = 0) readonly buffer PerDrawDataVector { PerDrawData perDrawDataVector[]; };
-layout(binding = 1) readonly buffer DrawCommands { DrawCommand drawCommands[]; };
-layout(binding = 2) readonly buffer Meshlets { Meshlet meshlets[]; };
-layout(binding = 3) readonly buffer Meshes { Mesh meshes[]; };
+layout(binding = 0) uniform UniformBufferObject { PerFrameData perFrameData; };
+layout(binding = 1) readonly buffer PerDrawDataVector { PerDrawData perDrawDataVector[]; };
+layout(binding = 2) readonly buffer DrawCommands { DrawCommand drawCommands[]; };
+layout(binding = 3) readonly buffer Meshlets { Meshlet meshlets[]; };
+layout(binding = 4) readonly buffer Meshes { Mesh meshes[]; };
+layout(binding = 8) buffer MeshletVisibility { uint meshletVisibility[]; };
+layout(binding = 9) uniform sampler2D hzb;
+
+layout (push_constant) uniform block
+{
+    PerPassData perPassData;
+};
 
 taskNV out Task
 {
 	uint meshletIndices[kShaderGroupSizeNV];
 } outTask;
-
-layout (push_constant) uniform block
-{
-    PerFrameData perFrameData;
-};
 
 void main()
 {
@@ -33,11 +36,9 @@ void main()
 	PerDrawData perDrawData = perDrawDataVector[drawIndex];
 	
 	Mesh mesh = meshes[perDrawData.meshIndex];
-	uint subsetIndex = drawCommands[gl_DrawID].subsetIndex;
-	MeshSubset subset = mesh.subsets[subsetIndex];
 	
 	uint lodIndex = drawCommands[gl_DrawID].lodIndex;
-	MeshLod meshLod = subset.lods[lodIndex];
+	MeshLod meshLod = mesh.lods[lodIndex];
 
 	uint groupThreadIndex = gl_LocalInvocationID.x;
 	uint localMeshletIndex = gl_GlobalInvocationID.x;
@@ -47,33 +48,44 @@ void main()
 	{
 		return;
 	}
+	
+	bool bPrepass = subgroupAny(perPassData.bPrepass == 1);
 
-	vec3 coneApex = (perDrawData.model * vec4(
+	vec3 center = (perDrawData.model * vec4(
 		meshlets[meshletIndex].center[0],
 		meshlets[meshletIndex].center[1],
 		meshlets[meshletIndex].center[2], 1.0)).xyz;
 	
-	vec3 center = (perDrawData.model * vec4(
+	// TODO-MILKRU: Multiply meshlet bounding spheres by scale.
+	// float scaledRadius = scale meshlets[meshletIndex].radius
+
+	vec3 coneAxis = (perDrawData.model * vec4(
 		int(meshlets[meshletIndex].coneAxis[0]) / 127.0,
 		int(meshlets[meshletIndex].coneAxis[1]) / 127.0,
 		int(meshlets[meshletIndex].coneAxis[2]) / 127.0, 0.0)).xyz;
 
-	vec3 cameraPosition = perFrameData.cameraPosition;
+	vec3 cameraPosition = perFrameData.freezeCameraPosition.xyz;
 	float coneCutoff = int(meshlets[meshletIndex].coneCutoff) / 127.0;
 	
-	bool bVisible = true;
+	uint meshletVisibilityIndex = perDrawData.meshletVisibilityOffset + localMeshletIndex;
+
+	// Bit packing
+	bool bPreviousVisibility = ((meshletVisibility[meshletVisibilityIndex / 32] >> (meshletVisibilityIndex % 32)) & 1u) == 1u;
+
+	bool bOcclusionCullingEnabled = perFrameData.bMeshletOcclusionCullingEnabled == 1;
+	bool bVisible = bPrepass && bOcclusionCullingEnabled ? bPreviousVisibility : true;
 	
-	bool bConeCullingEnabled = perFrameData.bEnableMeshletConeCulling == 1;
+	bool bConeCullingEnabled = perFrameData.bMeshletConeCullingEnabled == 1;
 	if (subgroupAny(bConeCullingEnabled))
 	{
 		if (bVisible)
 		{
-			bool bConeCulled = dot(normalize(coneApex - cameraPosition), center) >= coneCutoff;
+			bool bConeCulled = dot(normalize(center - cameraPosition), coneAxis) >= coneCutoff;
 			bVisible = bVisible && !bConeCulled;
 		}
 	}
 	
-	bool bFrustumCullingEnabled = perFrameData.bEnableMeshletFrustumCulling == 1;
+	bool bFrustumCullingEnabled = perFrameData.bMeshletFrustumCullingEnabled == 1;
 	if (subgroupAny(bFrustumCullingEnabled))
 	{
 		if (bVisible)
@@ -84,24 +96,67 @@ void main()
 			for(int i = 0; i < kFrustumPlaneCount; ++i)
 			{
 				bFrustumCulled = bFrustumCulled ||
-					dot(vec4(coneApex, 1.0), perFrameData.frustumPlanes[i]) + meshlets[meshletIndex].radius < 0.0;
+					dot(vec4(center, 1.0), perFrameData.freezeFrustumPlanes[i]) + meshlets[meshletIndex].radius < 0.0;
 			}
 
 			bVisible = bVisible && !bFrustumCulled;
 		}
 	}
 
-	uvec4 visibleBallot = subgroupBallot(bVisible);
-	
-	if (bVisible)
+	if (!bPrepass)
 	{
-		uint subgroupLocalMeshletIndex = subgroupBallotExclusiveBitCount(visibleBallot);
+		if (subgroupAny(bOcclusionCullingEnabled))
+		{
+			if (bVisible)
+			{
+				vec3 centerViewSpace = (perFrameData.freezeView * vec4(center, 1.0)).xyz;
+				float P00 = perFrameData.projection[0][0];
+				float P11 = perFrameData.projection[1][1];
+				float zNear = perFrameData.projection[3][2];
+				vec4 AABB;
+
+				if (tryCalculateSphereBounds(centerViewSpace, meshlets[meshletIndex].radius, zNear, P00, P11, AABB))
+				{
+					float boundsWidth = (AABB.z - AABB.x) * float(perFrameData.hzbSize);
+					float boundsHeight = (AABB.w - AABB.y) * float(perFrameData.hzbSize);
+					float mipIndex = floor(log2(max(boundsWidth, boundsHeight)));
+
+					float occluderDepth = textureLod(hzb, 0.5 * (AABB.xy + AABB.zw), mipIndex).x;
+					float nearestBoundsDepth = zNear / (-centerViewSpace.z - meshlets[meshletIndex].radius);
+
+					bool bOcclusionCulled = occluderDepth >= nearestBoundsDepth;
+					bVisible = bVisible && !bOcclusionCulled;
+				}
+			}
+		}
+	}
+	
+	bool bDrawMeshlet = bPrepass || !bOcclusionCullingEnabled ? bVisible : bVisible && !bPreviousVisibility;
+	uvec4 drawMeshletBallot = subgroupBallot(bDrawMeshlet);
+	
+	if (bDrawMeshlet)
+	{
+		uint subgroupLocalMeshletIndex = subgroupBallotExclusiveBitCount(drawMeshletBallot);
 		outTask.meshletIndices[subgroupLocalMeshletIndex] = meshletIndex;
 	}
 	
 	if (groupThreadIndex == 0)
 	{
-		uint visibleMeshletCount = subgroupBallotBitCount(visibleBallot);
-		gl_TaskCountNV = visibleMeshletCount;
+		uint drawnMeshletCount = subgroupBallotBitCount(drawMeshletBallot);
+		gl_TaskCountNV = drawnMeshletCount;
+	}
+
+	if (!bPrepass && bOcclusionCullingEnabled)
+	{
+		// TODO-MILKRU: Ballot with group share memory optimisation?
+		// Bit packing
+		if (bVisible)
+		{
+			atomicOr(meshletVisibility[meshletVisibilityIndex / 32], 1u << meshletVisibilityIndex % 32);
+		}
+		else
+		{
+			atomicAnd(meshletVisibility[meshletVisibilityIndex / 32], ~(1u << meshletVisibilityIndex % 32));
+		}
 	}
 }

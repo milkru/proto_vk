@@ -5,22 +5,18 @@ struct Settings
 {
 	const char* deviceName = "Unknown Device";
 	std::map<std::string, f64> gpuTimes;
-	u64 inputAssemblyVertices = 0;
-	u64 inputAssemblyPrimitives = 0;
-	u64 vertexShaderInvocations = 0;
 	u64 clippingInvocations = 0;
-	u64 clippingPrimitives = 0;
-	u64 fragmentShaderInvocations = 0;
-	u64 computeShaderInvocations = 0;
+	u64 deviceMemoryUsage = 0;
 	i32 forcedLod = 0;
-	bool bForceMeshLodEnabled = false;
-	bool bFreezeCameraEnabled = false;
 	bool bMeshShadingPipelineSupported = false;
-	bool bMeshShadingPipelineEnabled = false;
-	bool bMeshFrustumCullingEnabled = false;
-	bool bMeshOcclusionCullingEnabled = false;
-	bool bMeshletConeCullingEnabled = false;
-	bool bMeshletFrustumCullingEnabled = false;
+	bool bEnableForceMeshLod = false;
+	bool bEnableFreezeCamera = false;
+	bool bEnableMeshShadingPipeline = false;
+	bool bEnableMeshFrustumCulling = false;
+	bool bEnableMeshOcclusionCulling = false;
+	bool bEnableMeshletConeCulling = false;
+	bool bEnableMeshletFrustumCulling = false;
+	bool bEnableMeshletOcclusionCulling = false;
 };
 
 namespace gui
@@ -43,7 +39,7 @@ namespace gui
 		u32 _frameIndex,
 		Texture& _rAttachment);
 
-	void updateGpuPerformanceState(
-		VkPhysicalDeviceLimits _deviceLimits,
+	void updateGpuInfo(
+		Device& _rDevice,
 		Settings& _rSettings);
 }

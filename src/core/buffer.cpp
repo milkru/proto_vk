@@ -33,7 +33,7 @@ Buffer createBuffer(
 
 	if (_desc.access == MemoryAccess::Host)
 	{
-		// Persistently mapped memory, which should be faster on NVidia.
+		// Persistently mapped memory.
 		vmaMapMemory(_rDevice.allocator, buffer.allocation, &buffer.pMappedData);
 	}
 

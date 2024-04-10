@@ -5,6 +5,8 @@
 #include "texture.h"
 #include "pass.h"
 
+#include <algorithm>
+
 static bool tryUpdateBindingShaderStage(
 	std::vector<VkDescriptorSetLayoutBinding>& _bindings,
 	VkDescriptorSetLayoutBinding _binding)
@@ -38,6 +40,13 @@ static std::vector<VkDescriptorSetLayoutBinding> mergeSetLayoutBindings(
 			mergedLayoutBindings.push_back(rLayoutBinding);
 		}
 	}
+
+	std::sort(mergedLayoutBindings.begin(), mergedLayoutBindings.end(), [](
+		VkDescriptorSetLayoutBinding& _first,
+		VkDescriptorSetLayoutBinding& _second)
+		{
+			return _first.binding < _second.binding;
+		});
 
 	return mergedLayoutBindings;
 }

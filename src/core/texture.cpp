@@ -58,6 +58,7 @@ static Sampler getOrCreateSampler(
 	u32 hash = calculateSamplerHash(_desc);
 	auto sharedSampler = gSamplerCache.find(hash);
 
+	// TODO-MPG: This should be atomic
 	if (sharedSampler != gSamplerCache.end())
 	{
 		++sharedSampler->second.shareCount;
@@ -95,6 +96,7 @@ static Sampler getOrCreateSampler(
 		.resource = sampler };
 }
 
+// TODO-MPG: This should be atomic
 static void destroySampler(
 	Device& _rDevice,
 	Sampler& _rSampler)
@@ -236,7 +238,7 @@ void textureBarrier(
 	imageMemoryBarrier.image = _rTexture.resource;
 	imageMemoryBarrier.subresourceRange = subresourceRange;
 
-	// TODO-MILKRU: Store all pipeline barriers and flush them together once they are needed (i.e. before draw call).
+	// TODO-MILKRU: Store all pipeline barriers and flush them together once they are needed (i.e. before draw call)
 	vkCmdPipelineBarrier(
 		_commandBuffer,
 		_srcStageMask,

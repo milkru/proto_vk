@@ -34,6 +34,7 @@ namespace gui
 		std::array<Buffer, kMaxFramesInFlightCount> indexBuffers;
 		Texture fontTexture;
 		Pipeline pipeline;
+		VkPhysicalDeviceProperties deviceProperties;
 	};
 
 	static Context& getContext()
@@ -322,11 +323,11 @@ namespace gui
 				plotTimeGraph(1.e3 * rIO.DeltaTime, timeGraph);
 			}
 
+			f64 totalGpuTime = 0.0;
 			{
 				static TimeGraphState timeGraph{};
 				timeGraph.name = "GPU Time";
 
-				f64 totalGpuTime = 0.0;
 				for (auto& rGpuTime : _rSettings.gpuTimes)
 				{
 					totalGpuTime += rGpuTime.second;
@@ -344,15 +345,13 @@ namespace gui
 
 			ImGui::Separator();
 
-			{
-				ImGui::Text("Input Assembly Vertices:     %lld", _rSettings.inputAssemblyVertices);
-				ImGui::Text("Input Assembly Primitives:   %lld", _rSettings.inputAssemblyPrimitives);
-				ImGui::Text("Vertex Shader Invocations:   %lld", _rSettings.vertexShaderInvocations);
-				ImGui::Text("Clipping Invocations:        %lld", _rSettings.clippingInvocations);
-				ImGui::Text("Clipping Primitives:         %lld", _rSettings.clippingPrimitives);
-				ImGui::Text("Fragment Shader Invocations: %lld", _rSettings.fragmentShaderInvocations);
-				ImGui::Text("Compute Shader Invocations:  %lld", _rSettings.computeShaderInvocations);
-			}
+			f64 trianglesPerFrame = _rSettings.clippingInvocations;
+			ImGui::Text("Triangles per frame:  %.2f M", trianglesPerFrame * 1e-6);
+
+			f64 trianglesPerSecond = (trianglesPerFrame * 1e3) / totalGpuTime;
+			ImGui::Text("Triangles per second: %.2f B", trianglesPerSecond * 1e-9);
+
+			ImGui::Text("Virtual memory usage: %llu MB", _rSettings.deviceMemoryUsage >> 20);
 
 			ImGui::End();
 		}
@@ -367,21 +366,22 @@ namespace gui
 
 			bWindowHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_None);
 
-			ImGui::Checkbox("Force Lod", &_rSettings.bForceMeshLodEnabled);
-			ImGui::BeginDisabled(!_rSettings.bForceMeshLodEnabled);
+			ImGui::Checkbox("Force Lod", &_rSettings.bEnableForceMeshLod);
+			ImGui::BeginDisabled(!_rSettings.bEnableForceMeshLod);
 			ImGui::SameLine();
 			ImGui::SliderInt("##Forced Lod", &_rSettings.forcedLod, 0, kMaxMeshLods - 1);
 			ImGui::EndDisabled();
-			ImGui::Checkbox("Mesh Frustum Culling", &_rSettings.bMeshFrustumCullingEnabled);
-			ImGui::Checkbox("Mesh Occlusion Culling", &_rSettings.bMeshOcclusionCullingEnabled);
-			ImGui::Checkbox("Freeze Camera", &_rSettings.bFreezeCameraEnabled);
+			ImGui::Checkbox("Mesh Frustum Culling", &_rSettings.bEnableMeshFrustumCulling);
+			ImGui::Checkbox("Mesh Occlusion Culling", &_rSettings.bEnableMeshOcclusionCulling);
+			ImGui::Checkbox("Freeze Camera", &_rSettings.bEnableFreezeCamera);
 			ImGui::Separator();
 
 			ImGui::BeginDisabled(!_rSettings.bMeshShadingPipelineSupported);
-			ImGui::Checkbox("Mesh Shading Pipeline", &_rSettings.bMeshShadingPipelineEnabled);
-			ImGui::BeginDisabled(!_rSettings.bMeshShadingPipelineEnabled);
-			ImGui::Checkbox("Meshlet Cone Culling", &_rSettings.bMeshletConeCullingEnabled);
-			ImGui::Checkbox("Meshlet Frustum Culling", &_rSettings.bMeshletFrustumCullingEnabled);
+			ImGui::Checkbox("Mesh Shading Pipeline", &_rSettings.bEnableMeshShadingPipeline);
+			ImGui::BeginDisabled(!_rSettings.bEnableMeshShadingPipeline);
+			ImGui::Checkbox("Meshlet Cone Culling", &_rSettings.bEnableMeshletConeCulling);
+			ImGui::Checkbox("Meshlet Frustum Culling", &_rSettings.bEnableMeshletFrustumCulling);
+			ImGui::Checkbox("Meshlet Occlusion Culling", &_rSettings.bEnableMeshletOcclusionCulling);
 			ImGui::EndDisabled();
 			ImGui::EndDisabled();
 
@@ -467,26 +467,39 @@ namespace gui
 			});
 	}
 
-	void updateGpuPerformanceState(
-		VkPhysicalDeviceLimits _deviceLimits,
+	void updateGpuInfo(
+		Device& _rDevice,
 		Settings& _rSettings)
 	{
+		VkPhysicalDeviceMemoryBudgetPropertiesEXT deviceMemoryBudget = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT };
+		VkPhysicalDeviceMemoryProperties2 deviceMemoryProperties = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2 };
+		deviceMemoryProperties.pNext = &deviceMemoryBudget;
+		vkGetPhysicalDeviceMemoryProperties2(_rDevice.physicalDevice, &deviceMemoryProperties);
+
+		_rSettings.deviceMemoryUsage = 0;
+		for (u32 memoryHeapIndex = 0; memoryHeapIndex < deviceMemoryProperties.memoryProperties.memoryHeapCount; ++memoryHeapIndex)
+		{
+			if (deviceMemoryProperties.memoryProperties.memoryHeaps[memoryHeapIndex].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
+			{
+				_rSettings.deviceMemoryUsage += deviceMemoryBudget.heapUsage[memoryHeapIndex];
+			}
+		}
+
+		Context& rContext = getContext();
+		vkGetPhysicalDeviceProperties(_rDevice.physicalDevice, &rContext.deviceProperties);
+
+		_rSettings.deviceName = rContext.deviceProperties.deviceName;
+
 		for (auto& rBlockName : gpu::profiler::getBlockNames())
 		{
 			f64 result;
-			if (GPU_BLOCK_RESULT(rBlockName, _deviceLimits, result))
+			if (GPU_BLOCK_RESULT(rBlockName, rContext.deviceProperties.limits, result))
 			{
 				_rSettings.gpuTimes.erase(rBlockName);
 				_rSettings.gpuTimes[rBlockName] = result;
 			}
 		}
 
-		GPU_STATS_RESULT("Frame", StatType::InputAssemblyVertices, _rSettings.inputAssemblyVertices);
-		GPU_STATS_RESULT("Frame", StatType::InputAssemblyPrimitives, _rSettings.inputAssemblyPrimitives);
-		GPU_STATS_RESULT("Frame", StatType::VertexShaderInvocations, _rSettings.vertexShaderInvocations);
 		GPU_STATS_RESULT("Frame", StatType::ClippingInvocations, _rSettings.clippingInvocations);
-		GPU_STATS_RESULT("Frame", StatType::ClippingPrimitives, _rSettings.clippingPrimitives);
-		GPU_STATS_RESULT("Frame", StatType::FragmentShaderInvocations, _rSettings.fragmentShaderInvocations);
-		GPU_STATS_RESULT("Frame", StatType::ComputeShaderInvocations, _rSettings.computeShaderInvocations);
 	}
 }

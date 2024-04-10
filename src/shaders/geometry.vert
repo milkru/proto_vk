@@ -5,16 +5,12 @@
 
 #include "shader_common.h"
 
-layout(binding = 0) readonly buffer Vertices { Vertex vertices[]; };
-layout(binding = 1) readonly buffer PerDrawDataVector { PerDrawData perDrawDataVector[]; };
-layout(binding = 2) readonly buffer DrawCommands { DrawCommand drawCommands[]; };
+layout(binding = 0) uniform UniformBufferObject { PerFrameData perFrameData; };
+layout(binding = 1) readonly buffer Vertices { Vertex vertices[]; };
+layout(binding = 2) readonly buffer PerDrawDataVector { PerDrawData perDrawDataVector[]; };
+layout(binding = 3) readonly buffer DrawCommands { DrawCommand drawCommands[]; };
 
 layout(location = 0) out vec3 outColor;
-
-layout (push_constant) uniform block
-{
-    PerFrameData perFrameData;
-};
 
 void main()
 {
@@ -41,11 +37,14 @@ void main()
 		
     gl_Position = perFrameData.projection * perFrameData.view * worldPosition;
 	
-	float shade = dot(normal, normalize(perFrameData.cameraPosition - worldPosition.xyz));
+	float shade = dot(normal, normalize(perFrameData.cameraPosition.xyz - worldPosition.xyz));
     outColor = shade * (0.5 + 0.5 * normal);
 
-	outColor = shade * vec3(
-		vertices[gl_VertexIndex].color[0],
-		vertices[gl_VertexIndex].color[1],
-		vertices[gl_VertexIndex].color[2]);
+	vec3 randomColor = shade * getRandomColor(drawIndex);
+	outColor = 0.6 * randomColor + 0.4 * outColor;
+
+	//outColor = shade * vec3(
+	//	vertices[gl_VertexIndex].color[0],
+	//	vertices[gl_VertexIndex].color[1],
+	//	vertices[gl_VertexIndex].color[2]);
 }

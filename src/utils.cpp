@@ -32,13 +32,6 @@ m4 getInfinitePerspectiveMatrix(
 		0.0f, 0.0f, _near, 0.0f);
 }
 
-u32 divideRoundingUp(
-	u32 _dividend,
-	u32 _divisor)
-{
-	return (_dividend + _divisor - 1) / _divisor;
-}
-
 u32 roundUpToPowerOfTwo(
 	f32 _value)
 {

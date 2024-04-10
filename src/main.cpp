@@ -31,11 +31,16 @@ const bool kbEnableMeshShadingPipeline = true;
 const u32 kPreferredSwapchainImageCount = 2;
 const bool kbEnableVSync = false;
 
-const u32 kWindowWidth = 1280;
-const u32 kWindowHeight = 720;
+const u32 kWindowWidth = 2048;
+const u32 kWindowHeight = 1080;
 
-const u32 kMaxDrawCount = 10; // 100'000;
-const f32 kSpawnCubeSize = 4.0f; // 100.0f;
+const u32 kMaxDrawCount = 1'000'000;
+const f32 kSpawnCubeSize = 150.0f;
+
+struct alignas(16) PerPassData
+{
+	int32_t bPrepass = 0;
+};
 
 static Texture createDepthTexture(
 	Device& _rDevice,
@@ -83,7 +88,7 @@ i32 main(
 	if (meshCount == 0)
 	{
 		printf("Provide mesh paths as command arguments.\n");
-		return 1;
+		return EXIT_FAILURE;
 	}
 
 	GLFWwindow* pWindow = createWindow({
@@ -250,14 +255,15 @@ i32 main(
 	DrawBuffers drawBuffers;
 	{
 		Geometry geometry{};
+
 		for (u32 meshIndex = 0; meshIndex < meshCount; ++meshIndex)
 		{
 			const char* meshPath = meshPaths[meshIndex];
-			loadMesh(meshPath, device.bMeshShadingPipelineAllowed, geometry);
+			loadMesh(geometry, meshPath, device.bMeshShadingPipelineAllowed);
 		}
 
-		geometryBuffers = createGeometryBuffers(device, geometry, meshCount, meshPaths);
-		drawBuffers = createDrawBuffers(device, geometry, meshCount, kMaxDrawCount, kSpawnCubeSize);
+		geometryBuffers = createGeometryBuffers(device, geometry);
+		drawBuffers = createDrawBuffers(device, geometry, kMaxDrawCount, kSpawnCubeSize);
 	}
 
 	std::array<VkCommandBuffer, kMaxFramesInFlightCount> commandBuffers;
@@ -274,53 +280,51 @@ i32 main(
 
 	gpu::profiler::initialize(device);
 
-	struct
+	struct alignas(16)
 	{
 		m4 view;
+		m4 freezeView;
 		m4 projection;
-		v4 frustumPlanes[kFrustumPlaneCount];
-		v3 cameraPosition;
+		v4 freezeFrustumPlanes[kFrustumPlaneCount];
+		v4 cameraPosition;
+		v4 freezeCameraPosition;
 		u32 maxDrawCount;
 		f32 lodTransitionBase;
 		f32 lodTransitionStep;
 		i32 forcedLod;
 		u32 hzbSize;
-		i8 bPrepass;
-		i8 bEnableMeshFrustumCulling;
-		i8 bEnableMeshOcclusionCulling;
-		i8 bEnableMeshletConeCulling;
-		i8 bEnableMeshletFrustumCulling;
-
-		u32 padding0;
-		u32 padding1;
+		i32 bMeshShadingPipelineEnabled;
+		i32 bMeshFrustumCullingEnabled;
+		i32 bMeshOcclusionCullingEnabled;
+		i32 bMeshletConeCullingEnabled;
+		i32 bMeshletFrustumCullingEnabled;
+		i32 bMeshletOcclusionCullingEnabled;
 	} perFrameData = {};
 
-	//////////////////////////////////////////////////
-	// TODO-MILKRU: Make it dependent on flight frames
-	Buffer perFrameDataBuffer = createBuffer(device, {
+	std::array<Buffer, kMaxFramesInFlightCount> perFrameDataBuffers;
+	for (Buffer& rPerFrameDataBuffer : perFrameDataBuffers)
+	{
+		rPerFrameDataBuffer = createBuffer(device, {
 			.byteSize = sizeof(perFrameData),
 			.access = MemoryAccess::Host,
-			.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			.pContents = &perFrameData });
-	//////////////////////////////////////////////////
-
-	VkPhysicalDeviceProperties physicalDeviceProperties;
-	vkGetPhysicalDeviceProperties(device.physicalDevice, &physicalDeviceProperties);
+			.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT });
+	}
 
 	gui::initialize(device, swapchain.format, depthTexture.format, (f32)kWindowWidth, (f32)kWindowHeight);
 
 	Settings settings = {
-		.deviceName = physicalDeviceProperties.deviceName,
-		.bFreezeCameraEnabled = false,
-		.bMeshFrustumCullingEnabled = true,
-		.bMeshOcclusionCullingEnabled = true };
+		.bEnableMeshFrustumCulling = true,
+		.bEnableMeshOcclusionCulling = true };
 
 	bool bMeshShadingPipelineEnabled =
-		settings.bMeshletConeCullingEnabled =
-		settings.bMeshletFrustumCullingEnabled =
-		settings.bMeshShadingPipelineEnabled =
+		settings.bEnableMeshletConeCulling =
+		settings.bEnableMeshletFrustumCulling =
+		settings.bEnableMeshletOcclusionCulling =
+		settings.bEnableMeshShadingPipeline =
 		settings.bMeshShadingPipelineSupported =
 		device.bMeshShadingPipelineAllowed;
+
+	u32 frameIndex = 0;
 
 	auto generateDrawsPass = [&](
 		VkCommandBuffer _commandBuffer,
@@ -328,41 +332,39 @@ i32 main(
 	{
 		GPU_BLOCK(_commandBuffer, _bPrepass ? "GenerateDrawsPrepass" : "GenerateDrawsPass");
 
-		perFrameData.bPrepass = _bPrepass ? 1 : 0;
+		PerPassData perPassData = { .bPrepass = _bPrepass ? 1 : 0 };
 
 		executePass(_commandBuffer, {
 			.pipeline = generateDrawsPipeline,
 			.bindings = {
+				Binding(perFrameDataBuffers[frameIndex]),
 				Binding(geometryBuffers.meshesBuffer),
 				Binding(drawBuffers.drawsBuffer),
 				Binding(drawBuffers.drawCommandsBuffer),
 				Binding(drawBuffers.drawCountBuffer),
-				Binding(drawBuffers.visibilityBuffer),
-				Binding(hzb, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
-				Binding(perFrameDataBuffer) }
-			//	,
-			//.pushConstants = {
-			//	.byteSize = sizeof(perFrameData),
-			//	.pData = &perFrameData }
-			},
+				Binding(drawBuffers.meshVisibilityBuffer),
+				Binding(hzb, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) },
+			.pushConstants = {
+				.byteSize = sizeof(PerPassData),
+				.pData = &perPassData } },
 				[&]()
 			{
-				vkCmdDispatch(_commandBuffer, divideRoundingUp(kMaxDrawCount, kShaderGroupSizeNV), 1, 1);
+				i32 groupCount = ceil(f32(kMaxDrawCount) / kShaderGroupSizeNV);
+				vkCmdDispatch(_commandBuffer, groupCount, 1, 1);
 			});
 	};
 
 	auto geometryPass = [&](
 		VkCommandBuffer _commandBuffer,
 		u32 _currentSwapchainImageIndex,
-		bool _bMeshShadingPipelineEnabled,
 		bool _bPrepass)
 	{
 		GPU_BLOCK(_commandBuffer, _bPrepass ? "GeometryPrepass" : "GeometryPass");
 
-		perFrameData.bPrepass = _bPrepass ? 1 : 0;
+		PerPassData perPassData = { .bPrepass = _bPrepass ? 1 : 0 };
 
 		executePass(_commandBuffer, {
-			.pipeline = _bMeshShadingPipelineEnabled ? geometryMeshletPipeline : geometryPipeline,
+			.pipeline = bMeshShadingPipelineEnabled ? geometryMeshletPipeline : geometryPipeline,
 			.viewport = {
 				.offset = { 0.0f, 0.0f },
 				.extent = { swapchain.extent.width, swapchain.extent.height }},
@@ -377,35 +379,41 @@ i32 main(
 				.texture = depthTexture,
 				.loadOp = _bPrepass ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
 				.clear = { 0.0f, 0 } },
-			.bindings = _bMeshShadingPipelineEnabled ?
+			.bindings = bMeshShadingPipelineEnabled ?
 				Bindings({
+					Binding(perFrameDataBuffers[frameIndex]),
 					Binding(drawBuffers.drawsBuffer),
 					Binding(drawBuffers.drawCommandsBuffer),
 					Binding(geometryBuffers.meshletBuffer),
 					Binding(geometryBuffers.meshesBuffer),
 					Binding(geometryBuffers.meshletVerticesBuffer),
 					Binding(geometryBuffers.meshletTrianglesBuffer),
-					Binding(geometryBuffers.vertexBuffer) }) :
+					Binding(geometryBuffers.vertexBuffer),
+					Binding(drawBuffers.meshletVisibilityBuffer),
+					Binding(hzb, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) }) :
 				Bindings({
+					Binding(perFrameDataBuffers[frameIndex]),
 					Binding(geometryBuffers.vertexBuffer),
 					Binding(drawBuffers.drawsBuffer),
 					Binding(drawBuffers.drawCommandsBuffer) }),
-			.pushConstants = {
-				.byteSize = sizeof(perFrameData),
-				.pData = &perFrameData } },
-				[&]()
+			.pushConstants = bMeshShadingPipelineEnabled ?
+				PushConstants({
+					.byteSize = sizeof(PerPassData),
+					.pData = &perPassData }) :
+				PushConstants() },
+			[&]()
 			{
-				if (_bMeshShadingPipelineEnabled)
+				if (bMeshShadingPipelineEnabled)
 				{
 					vkCmdDrawMeshTasksIndirectCountNV(_commandBuffer, drawBuffers.drawCommandsBuffer.resource,
-						offsetof(DrawCommand, taskCount), drawBuffers.drawCountBuffer.resource, 0, drawBuffers.maxDrawCommandCount, sizeof(DrawCommand));
+						offsetof(DrawCommand, taskCount), drawBuffers.drawCountBuffer.resource, 0, kMaxDrawCount, sizeof(DrawCommand));
 				}
 				else
 				{
 					vkCmdBindIndexBuffer(_commandBuffer, geometryBuffers.indexBuffer.resource, 0, VK_INDEX_TYPE_UINT32);
 
 					vkCmdDrawIndexedIndirectCount(_commandBuffer, drawBuffers.drawCommandsBuffer.resource,
-						offsetof(DrawCommand, indexCount), drawBuffers.drawCountBuffer.resource, 0, drawBuffers.maxDrawCommandCount, sizeof(DrawCommand));
+						offsetof(DrawCommand, indexCount), drawBuffers.drawCountBuffer.resource, 0, kMaxDrawCount, sizeof(DrawCommand));
 				}
 			});
 	};
@@ -418,7 +426,6 @@ i32 main(
 		for (u32 mipIndex = 0; mipIndex < hzb.mipCount; ++mipIndex)
 		{
 			u32 hzbMipSize = hzbSize >> mipIndex;
-
 			Texture& rInputTexture = mipIndex == 0 ? depthTexture : hzbMips[mipIndex - 1];
 
 			executePass(_commandBuffer, {
@@ -431,7 +438,7 @@ i32 main(
 					.pData = &hzbMipSize } },
 					[&]()
 				{
-					iv2 groupCount = iv2(divideRoundingUp(hzbMipSize, kShaderGroupSizeNV)); // TODO-MPG: Use ceil instead
+					iv2 groupCount = iv2(ceil(f32(hzbMipSize) / kShaderGroupSizeNV));
 					vkCmdDispatch(_commandBuffer, groupCount.x, groupCount.y, 1);
 				});
 
@@ -442,8 +449,6 @@ i32 main(
 		}
 	};
 
-	u32 frameIndex = 0;
-
 	while (!glfwWindowShouldClose(pWindow))
 	{
 		EASY_BLOCK("Frame");
@@ -452,7 +457,7 @@ i32 main(
 
 		gui::newFrame(pWindow, settings);
 
-		bMeshShadingPipelineEnabled = settings.bMeshShadingPipelineEnabled;
+		bMeshShadingPipelineEnabled = settings.bEnableMeshShadingPipeline;
 
 		VkCommandBuffer commandBuffer = commandBuffers[frameIndex];
 		FramePacingState framePacingState = framePacingStates[frameIndex];
@@ -500,23 +505,27 @@ i32 main(
 
 			perFrameData.view = camera.view;
 			perFrameData.projection = camera.projection;
+			perFrameData.cameraPosition = v4(camera.position, 0.0f);
 			perFrameData.maxDrawCount = kMaxDrawCount;
 			perFrameData.lodTransitionBase = 4.0f;
 			perFrameData.lodTransitionStep = 1.25f;
-			perFrameData.forcedLod = settings.bForceMeshLodEnabled ? settings.forcedLod : -1;
+			perFrameData.forcedLod = settings.bEnableForceMeshLod ? settings.forcedLod : -1;
 			perFrameData.hzbSize = hzbSize;
-			perFrameData.bEnableMeshFrustumCulling = settings.bMeshFrustumCullingEnabled ? 1 : 0;
-			perFrameData.bEnableMeshOcclusionCulling = settings.bMeshOcclusionCullingEnabled ? 1 : 0;
-			perFrameData.bEnableMeshletConeCulling = settings.bMeshletConeCullingEnabled ? 1 : 0;
-			perFrameData.bEnableMeshletFrustumCulling = settings.bMeshletFrustumCullingEnabled ? 1 : 0;
+			perFrameData.bMeshShadingPipelineEnabled = settings.bEnableMeshShadingPipeline ? 1 : 0;
+			perFrameData.bMeshFrustumCullingEnabled = settings.bEnableMeshFrustumCulling ? 1 : 0;
+			perFrameData.bMeshOcclusionCullingEnabled = settings.bEnableMeshOcclusionCulling ? 1 : 0;
+			perFrameData.bMeshletConeCullingEnabled = settings.bEnableMeshletConeCulling ? 1 : 0;
+			perFrameData.bMeshletFrustumCullingEnabled = settings.bEnableMeshletFrustumCulling ? 1 : 0;
+			perFrameData.bMeshletOcclusionCullingEnabled = settings.bEnableMeshletOcclusionCulling ? 1 : 0;
 
-			if (!settings.bFreezeCameraEnabled)
+			if (!settings.bEnableFreezeCamera)
 			{
-				perFrameData.cameraPosition = camera.position;
-				getFrustumPlanes(camera, perFrameData.frustumPlanes);
+				perFrameData.freezeView = perFrameData.view;
+				perFrameData.freezeCameraPosition = perFrameData.cameraPosition;
+				getFrustumPlanes(camera, perFrameData.freezeFrustumPlanes);
 			}
 
-			memcpy(perFrameDataBuffer.pMappedData, &perFrameData, sizeof(perFrameData));
+			memcpy(perFrameDataBuffers[frameIndex].pMappedData, &perFrameData, sizeof(perFrameData));
 		}
 
 		{
@@ -556,10 +565,10 @@ i32 main(
 						VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
 						VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);
 
-					geometryPass(commandBuffer, currentSwapchainImageIndex, bMeshShadingPipelineEnabled, /*bPrepass*/ true);
+					geometryPass(commandBuffer, currentSwapchainImageIndex, /*bPrepass*/ true);
 				}
 
-				if (!settings.bFreezeCameraEnabled)
+				if (!settings.bEnableFreezeCamera)
 				{
 					textureBarrier(commandBuffer, hzb,
 						VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
@@ -598,7 +607,7 @@ i32 main(
 						VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
 						VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);
 
-					geometryPass(commandBuffer, currentSwapchainImageIndex, bMeshShadingPipelineEnabled, /*bPrepass*/ false);
+					geometryPass(commandBuffer, currentSwapchainImageIndex, /*bPrepass*/ false);
 				}
 
 				gui::drawFrame(commandBuffer, frameIndex, swapchain.textures[currentSwapchainImageIndex]);
@@ -616,7 +625,7 @@ i32 main(
 			submitAndPresent(commandBuffer, device, swapchain, currentSwapchainImageIndex, framePacingState);
 		}
 
-		gui::updateGpuPerformanceState(physicalDeviceProperties.limits, settings);
+		gui::updateGpuInfo(device, settings);
 
 		frameIndex = (frameIndex + 1) % kMaxFramesInFlightCount;
 	}
@@ -632,9 +641,10 @@ i32 main(
 		gui::terminate();
 		gpu::profiler::terminate(device);
 
-		//////////////////////////////////////////////////
-		destroyBuffer(device, perFrameDataBuffer);
-		//////////////////////////////////////////////////
+		for (Buffer& rPerFrameDataBuffer : perFrameDataBuffers)
+		{
+			destroyBuffer(device, rPerFrameDataBuffer);
+		}
 
 		for (FramePacingState& rFramePacingState : framePacingStates)
 		{
@@ -648,7 +658,7 @@ i32 main(
 			destroyTextureView(device, rHzbMip);
 		}
 
-		{
+		{ // TODO-MILKRU: Move to destroyGeometryBuffers
 			if (device.bMeshShadingPipelineAllowed)
 			{
 				destroyBuffer(device, geometryBuffers.meshletBuffer);
@@ -661,11 +671,12 @@ i32 main(
 			destroyBuffer(device, geometryBuffers.meshesBuffer);
 		}
 
-		{
+		{ // TODO-MILKRU: Move to destroyDrawBuffers
 			destroyBuffer(device, drawBuffers.drawsBuffer);
 			destroyBuffer(device, drawBuffers.drawCommandsBuffer);
 			destroyBuffer(device, drawBuffers.drawCountBuffer);
-			destroyBuffer(device, drawBuffers.visibilityBuffer);
+			destroyBuffer(device, drawBuffers.meshVisibilityBuffer);
+			destroyBuffer(device, drawBuffers.meshletVisibilityBuffer);
 		}
 
 		destroyPipeline(device, hzbDownsamplePipeline);
@@ -690,5 +701,5 @@ i32 main(
 		printf("CPU profile capture saved to %s file.\n", profileCaptureFileName);
 	}
 
-	return 0;
+	return EXIT_SUCCESS;
 }
