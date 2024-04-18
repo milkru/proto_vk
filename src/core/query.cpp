@@ -142,8 +142,6 @@ void updateQueryPoolResults(
 
 	u32 resultElementCount = getQueryResultElementCount(_rQueryPool.type);
 
-	// TODO-MILKRU: Theres something wrong with getting query results in some situations.
-	// Freeze camera completely breaks this. That might be a good clue. Was this present before? Check old code.
 	VkResult result = vkGetQueryPoolResults(_rDevice.device, _rQueryPool.queryPoolVk, 0, _rQueryPool.allocatedQueries,
 		_rQueryPool.queryResults.size() * sizeof(u64), _rQueryPool.queryResults.data(), resultElementCount * sizeof(u64),
 		VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);

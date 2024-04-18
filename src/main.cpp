@@ -330,8 +330,6 @@ i32 main(
 		VkCommandBuffer _commandBuffer,
 		bool _bPrepass)
 	{
-		GPU_BLOCK(_commandBuffer, _bPrepass ? "GenerateDrawsPrepass" : "GenerateDrawsPass");
-
 		PerPassData perPassData = { .bPrepass = _bPrepass ? 1 : 0 };
 
 		executePass(_commandBuffer, {
@@ -359,8 +357,6 @@ i32 main(
 		u32 _currentSwapchainImageIndex,
 		bool _bPrepass)
 	{
-		GPU_BLOCK(_commandBuffer, _bPrepass ? "GeometryPrepass" : "GeometryPass");
-
 		PerPassData perPassData = { .bPrepass = _bPrepass ? 1 : 0 };
 
 		executePass(_commandBuffer, {
@@ -421,8 +417,6 @@ i32 main(
 	auto buildHzbPass = [&](
 		VkCommandBuffer _commandBuffer)
 	{
-		GPU_BLOCK(_commandBuffer, "BuildHzbPass");
-
 		for (u32 mipIndex = 0; mipIndex < hzb.mipCount; ++mipIndex)
 		{
 			u32 hzbMipSize = hzbSize >> mipIndex;
@@ -541,11 +535,13 @@ i32 main(
 			{
 				GPU_STATS(commandBuffer, "Frame");
 
+				textureBarrier(commandBuffer, swapchain.textures[currentSwapchainImageIndex],
+					VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+					VK_ACCESS_NONE, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+
 				{
-					textureBarrier(commandBuffer, swapchain.textures[currentSwapchainImageIndex],
-						VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-						VK_ACCESS_NONE, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-						VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+					GPU_BLOCK(commandBuffer, "GenerateDrawsPrepass");
 
 					fillBuffer(commandBuffer, device, drawBuffers.drawCountBuffer, 0,
 						VK_ACCESS_INDIRECT_COMMAND_READ_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
@@ -556,6 +552,10 @@ i32 main(
 						VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
 					generateDrawsPass(commandBuffer, /*bPrepass*/ true);
+				}
+
+				{
+					GPU_BLOCK(commandBuffer, "GeometryPrepass");
 
 					bufferBarrier(commandBuffer, device, drawBuffers.drawCountBuffer,
 						VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
@@ -568,27 +568,33 @@ i32 main(
 					geometryPass(commandBuffer, currentSwapchainImageIndex, /*bPrepass*/ true);
 				}
 
-				if (!settings.bEnableFreezeCamera)
 				{
-					textureBarrier(commandBuffer, hzb,
-						VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
-						VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-						VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+					GPU_BLOCK(commandBuffer, "BuildHzbPass");
 
-					textureBarrier(commandBuffer, depthTexture,
-						VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-						VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-						VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+					if (!settings.bEnableFreezeCamera)
+					{
+						textureBarrier(commandBuffer, hzb,
+							VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+							VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+							VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
-					buildHzbPass(commandBuffer);
+						textureBarrier(commandBuffer, depthTexture,
+							VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+							VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+							VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
-					textureBarrier(commandBuffer, depthTexture,
-						VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-						VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-						VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT);
+						buildHzbPass(commandBuffer);
+
+						textureBarrier(commandBuffer, depthTexture,
+							VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+							VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+							VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT);
+					}
 				}
 
 				{
+					GPU_BLOCK(commandBuffer, "GenerateDrawsPass");
+
 					fillBuffer(commandBuffer, device, drawBuffers.drawCountBuffer, 0,
 						VK_ACCESS_INDIRECT_COMMAND_READ_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
 						VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
@@ -598,6 +604,10 @@ i32 main(
 						VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
 					generateDrawsPass(commandBuffer, /*bPrepass*/ false);
+				}
+
+				{
+					GPU_BLOCK(commandBuffer, "GeometryPass");
 
 					bufferBarrier(commandBuffer, device, drawBuffers.drawCountBuffer,
 						VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
@@ -618,11 +628,11 @@ i32 main(
 					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
 			}
 
-			gpu::profiler::endFrame(device);
-
 			VK_CALL(vkEndCommandBuffer(commandBuffer));
 
 			submitAndPresent(commandBuffer, device, swapchain, currentSwapchainImageIndex, framePacingState);
+
+			gpu::profiler::endFrame(device);
 		}
 
 		gui::updateGpuInfo(device, settings);

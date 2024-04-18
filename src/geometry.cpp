@@ -7,8 +7,9 @@
 #include <fast_obj.h>
 #include <meshoptimizer.h>
 
-// TODO-MILKRU: GPU time stops working after Freeze Camera is used, even after it's enabled again
+// TODO-MILKRU: Add new pictures in the book
 // TODO-MILKRU: New mesh shading pipeline and test RenderDoc
+// TODO-MILKRU: Use meshopt_optimizeMeshlet from new version
 // TODO-MILKRU: Small triangle and back-face triangle culling
 // TODO-MILKRU: Delete old pipeline
 // TODO-MILKRU: Task command submission can be re-purposed for continues LOD system, since many tasks are started, but few are used for drawing
