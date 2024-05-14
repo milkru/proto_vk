@@ -89,8 +89,9 @@ struct DrawCommand
 	uint vertexOffset;
 	uint firstInstance;
 
-	uint taskCount;
-	uint firstTask;
+	uint taskX;
+	uint taskY;
+	uint taskZ;
 
 	uint drawIndex;
 	uint lodIndex;

@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#define SYNCHRONIZATION_VALIDATION 1 && _DEBUG
+
 static VkInstance createInstance(
 	bool _bEnableValidationLayers)
 {
@@ -48,7 +50,7 @@ static VkInstance createInstance(
 	instanceCreateInfo.enabledExtensionCount = ARRAY_SIZE(instanceExtensions);
 	instanceCreateInfo.ppEnabledExtensionNames = instanceExtensions;
 
-#ifdef DEBUG_
+#if SYNCHRONIZATION_VALIDATION
 	VkValidationFeatureEnableEXT enabledValidationFeatures[] = { VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT };
 
 	VkValidationFeaturesEXT validationFeatures = { VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT };
@@ -56,7 +58,7 @@ static VkInstance createInstance(
 	validationFeatures.pEnabledValidationFeatures = enabledValidationFeatures;
 
 	instanceCreateInfo.pNext = &validationFeatures;
-#endif // DEBUG_
+#endif // SYNCHRONIZATION_VALIDATION
 
 	VkInstance instance;
 	VK_CALL(vkCreateInstance(&instanceCreateInfo, nullptr, &instance));
@@ -231,7 +233,7 @@ static bool isMeshShadingPipelineSupported(
 
 	for (VkExtensionProperties& extension : extensions)
 	{
-		if (strcmp(extension.extensionName, VK_NV_MESH_SHADER_EXTENSION_NAME) == 0)
+		if (strcmp(extension.extensionName, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0)
 		{
 			return true;
 		}
@@ -248,7 +250,7 @@ static VkDevice createDevice(
 	std::vector<const char*> deviceExtensions(kRequiredDeviceExtensions, std::end(kRequiredDeviceExtensions));
 	if (_bMeshShadingAllowed)
 	{
-		deviceExtensions.push_back(VK_NV_MESH_SHADER_EXTENSION_NAME);
+		deviceExtensions.push_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
 	}
 
 	f32 queuePriority = 1.0f;
@@ -276,7 +278,7 @@ static VkDevice createDevice(
 	VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeatures = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR };
 	dynamicRenderingFeatures.dynamicRendering = VK_TRUE;
 
-	VkPhysicalDeviceMeshShaderFeaturesNV meshShaderFeatures = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV };
+	VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT };
 	meshShaderFeatures.taskShader = VK_TRUE;
 	meshShaderFeatures.meshShader = VK_TRUE;
 

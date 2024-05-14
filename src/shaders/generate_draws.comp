@@ -9,7 +9,7 @@
 
 #include "shader_common.h"
 
-layout(local_size_x = kShaderGroupSizeNV) in;
+layout(local_size_x = kShaderGroupSize) in;
 layout(local_size_y = 1) in;
 layout(local_size_z = 1) in;
 
@@ -47,7 +47,6 @@ void main()
 		mesh.center[0],
 		mesh.center[1],
 		mesh.center[2], 1.0)).xyz;
-	
 	
 	// TODO-MILKRU: Multiply mesh bounding spheres by scale.
 	// float scaledRadius = scale mesh.radius
@@ -133,8 +132,9 @@ void main()
 		drawCommand.vertexOffset = mesh.vertexOffset;
 		drawCommand.firstInstance = 0;
 
-		drawCommand.taskCount = (meshLod.meshletCount + kShaderGroupSizeNV - 1) / kShaderGroupSizeNV;
-		drawCommand.firstTask = 0;
+		drawCommand.taskX = (meshLod.meshletCount + kShaderGroupSize - 1) / kShaderGroupSize;
+		drawCommand.taskY = 1;
+		drawCommand.taskZ = 1;
 
 		drawCommand.drawIndex = drawIndex;
 		drawCommand.lodIndex = lodIndex;
@@ -145,6 +145,7 @@ void main()
 		drawCommands[drawCommandIndex] = drawCommand;
 	}
 	
+	// TODO-MILKRU: If bOcclusionCullingEnabled is enabled as well
 	if (!bPrepass)
 	{
 		meshVisibility[drawIndex] = bVisible ? 1 : 0;

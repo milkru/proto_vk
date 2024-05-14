@@ -15,8 +15,9 @@ struct DrawCommand
 	u32 vertexOffset = 0;
 	u32 firstInstance = 0;
 
-	u32 taskCount = 0;
-	u32 firstTask = 0;
+	u32 taskX = 0;
+	u32 taskY = 0;
+	u32 taskZ = 0;
 
 	u32 drawIndex = 0;
 	u32 lodIndex = 0;

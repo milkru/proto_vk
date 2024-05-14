@@ -17,9 +17,6 @@
 [submodule "3rdparty/imgui"]
 	path = 3rdparty/imgui
 	url = https://github.com/ocornut/imgui
-[submodule "3rdparty/SPIRV-Reflect"]
-	path = 3rdparty/SPIRV-Reflect
-	url = https://github.com/KhronosGroup/SPIRV-Reflect
 [submodule "3rdparty/fast_obj"]
 	path = 3rdparty/fast_obj
 	url = https://github.com/thisistherk/fast_obj
@@ -44,3 +41,7 @@
 	path = 3rdparty/GKlib
 	url = https://github.com/milkru/GKlib.git
 	branch = master
+[submodule "3rdparty/SPIRV-Reflect"]
+	path = 3rdparty/SPIRV-Reflect
+	url = https://github.com/KhronosGroup/SPIRV-Reflect.git
+	branch = main

@@ -7,12 +7,16 @@
 #include <fast_obj.h>
 #include <meshoptimizer.h>
 
-// TODO-MILKRU: Add new pictures in the book
-// TODO-MILKRU: New mesh shading pipeline and test RenderDoc
 // TODO-MILKRU: Use meshopt_optimizeMeshlet from new version
 // TODO-MILKRU: Small triangle and back-face triangle culling
-// TODO-MILKRU: Delete old pipeline
+// TODO-MILKRU: Delete old pipeline?
+// TODO-MILKRU: Delete easy_profiler and use Superluminal for CPU profiling only
+// TODO-MILKRU: Geometry lazy serialization with runtime progress logging
+// TODO-MILKRU: Dynamic LOD system
 // TODO-MILKRU: Task command submission can be re-purposed for continues LOD system, since many tasks are started, but few are used for drawing
+// TODO-MILKRU: Emulate task shaders in a compute shader? https://themaister.net/blog/2024/01/17/modernizing-granites-mesh-rendering/
+// TODO-MILKRU: Implement Forward rendering with bindless, since overdraw with all of these geometry optimizations should be minimal. Check NSight overdraw view
+// TODO-MILKRU: Clustered light culling and binning. Check ACU, Doom and Doom Eternal implementations
 
 struct RawVertex
 {

@@ -14,7 +14,7 @@ source_group("Shader Files" FILES ${GLSL_SRC_FILES})
 foreach(GLSL_FILE ${GLSL_SRC_FILES})
 	get_filename_component(GLSL_FILE_NAME ${GLSL_FILE} NAME)
 	set(SPIRV_FILE "${PROJECT_BINARY_DIR}/shaders/${GLSL_FILE_NAME}.spv")
-	execute_process(COMMAND ${GLSL_COMPILER} "-g" ${GLSL_FILE} -o ${SPIRV_FILE} "--target-env=vulkan1.1")
+	execute_process(COMMAND ${GLSL_COMPILER} "-g" ${GLSL_FILE} -o ${SPIRV_FILE} "--target-env=vulkan1.2")
 endforeach(GLSL_FILE)
 
 message("Building Project:")

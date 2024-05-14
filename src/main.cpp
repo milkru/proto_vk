@@ -171,7 +171,7 @@ i32 main(
 	initializeSwapchainResources();
 
 	Camera camera = {
-		.fov = 45.0f,
+		.fov = 60.0f,
 		.aspect = f32(swapchain.extent.width) / f32(swapchain.extent.height),
 		.near = 0.01f,
 		.moveSpeed = 1.0f,
@@ -211,7 +211,7 @@ i32 main(
 		.attachmentLayout = {
 			.colorAttachments = { {
 				.format = swapchain.format,
-				.bBlendEnable = true } },
+				.bBlendEnable = false } },
 			.depthStencilFormat = { depthTexture.format }},
 		.rasterization = {
 			.cullMode = VK_CULL_MODE_BACK_BIT,
@@ -227,7 +227,7 @@ i32 main(
 			.attachmentLayout = {
 				.colorAttachments = { {
 					.format = swapchain.format,
-					.bBlendEnable = true } },
+					.bBlendEnable = false } },
 				.depthStencilFormat = { depthTexture.format }},
 			.rasterization = {
 				.cullMode = VK_CULL_MODE_BACK_BIT,
@@ -324,6 +324,12 @@ i32 main(
 		settings.bMeshShadingPipelineSupported =
 		device.bMeshShadingPipelineAllowed;
 
+	uint32_t geometryShaderStages = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+	if (device.bMeshShadingPipelineAllowed)
+	{
+		geometryShaderStages |= VK_PIPELINE_STAGE_TASK_SHADER_BIT_EXT | VK_PIPELINE_STAGE_MESH_SHADER_BIT_EXT;
+	}
+
 	u32 frameIndex = 0;
 
 	auto generateDrawsPass = [&](
@@ -347,11 +353,12 @@ i32 main(
 				.pData = &perPassData } },
 				[&]()
 			{
-				i32 groupCount = ceil(f32(kMaxDrawCount) / kShaderGroupSizeNV);
+				i32 groupCount = ceil(f32(kMaxDrawCount) / kShaderGroupSize);
 				vkCmdDispatch(_commandBuffer, groupCount, 1, 1);
 			});
 	};
 
+	// TODO-MILKRU: Split into two lambdas and put barriers inside
 	auto geometryPass = [&](
 		VkCommandBuffer _commandBuffer,
 		u32 _currentSwapchainImageIndex,
@@ -401,8 +408,8 @@ i32 main(
 			{
 				if (bMeshShadingPipelineEnabled)
 				{
-					vkCmdDrawMeshTasksIndirectCountNV(_commandBuffer, drawBuffers.drawCommandsBuffer.resource,
-						offsetof(DrawCommand, taskCount), drawBuffers.drawCountBuffer.resource, 0, kMaxDrawCount, sizeof(DrawCommand));
+					vkCmdDrawMeshTasksIndirectCountEXT(_commandBuffer, drawBuffers.drawCommandsBuffer.resource,
+						offsetof(DrawCommand, taskX), drawBuffers.drawCountBuffer.resource, 0, kMaxDrawCount, sizeof(DrawCommand));
 				}
 				else
 				{
@@ -432,7 +439,7 @@ i32 main(
 					.pData = &hzbMipSize } },
 					[&]()
 				{
-					iv2 groupCount = iv2(ceil(f32(hzbMipSize) / kShaderGroupSizeNV));
+					iv2 groupCount = iv2(ceil(f32(hzbMipSize) / kShaderGroupSize));
 					vkCmdDispatch(_commandBuffer, groupCount.x, groupCount.y, 1);
 				});
 
@@ -548,8 +555,8 @@ i32 main(
 						VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
 					bufferBarrier(commandBuffer, device, drawBuffers.drawCommandsBuffer,
-						VK_ACCESS_INDIRECT_COMMAND_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-						VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+						VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+						VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | geometryShaderStages, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
 					generateDrawsPass(commandBuffer, /*bPrepass*/ true);
 				}
@@ -562,8 +569,8 @@ i32 main(
 						VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);
 
 					bufferBarrier(commandBuffer, device, drawBuffers.drawCommandsBuffer,
-						VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
-						VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);
+						VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_SHADER_READ_BIT,
+						VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | geometryShaderStages);
 
 					geometryPass(commandBuffer, currentSwapchainImageIndex, /*bPrepass*/ true);
 				}
@@ -600,22 +607,22 @@ i32 main(
 						VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
 					bufferBarrier(commandBuffer, device, drawBuffers.drawCommandsBuffer,
-						VK_ACCESS_INDIRECT_COMMAND_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-						VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+						VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+						VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | geometryShaderStages, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
 					generateDrawsPass(commandBuffer, /*bPrepass*/ false);
 				}
 
 				{
 					GPU_BLOCK(commandBuffer, "GeometryPass");
-
+					
 					bufferBarrier(commandBuffer, device, drawBuffers.drawCountBuffer,
 						VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
 						VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);
 
 					bufferBarrier(commandBuffer, device, drawBuffers.drawCommandsBuffer,
-						VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
-						VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);
+						VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_SHADER_READ_BIT,
+						VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | geometryShaderStages);
 
 					geometryPass(commandBuffer, currentSwapchainImageIndex, /*bPrepass*/ false);
 				}

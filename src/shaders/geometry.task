@@ -4,13 +4,13 @@
 #extension GL_EXT_shader_8bit_storage: require
 #extension GL_EXT_shader_16bit_storage: require
 #extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
-#extension GL_NV_mesh_shader: require
+#extension GL_EXT_mesh_shader: require
 #extension GL_KHR_shader_subgroup_ballot: require
 #extension GL_KHR_shader_subgroup_vote: require
 
 #include "shader_common.h"
 
-layout(local_size_x = kShaderGroupSizeNV) in;
+layout(local_size_x = kShaderGroupSize) in;
 
 layout(binding = 0) uniform UniformBufferObject { PerFrameData perFrameData; };
 layout(binding = 1) readonly buffer PerDrawDataVector { PerDrawData perDrawDataVector[]; };
@@ -25,10 +25,7 @@ layout (push_constant) uniform block
     PerPassData perPassData;
 };
 
-taskNV out Task
-{
-	uint meshletIndices[kShaderGroupSizeNV];
-} outTask;
+taskPayloadSharedEXT uint meshletIndices[kShaderGroupSize];
 
 void main()
 {
@@ -69,7 +66,7 @@ void main()
 	
 	uint meshletVisibilityIndex = perDrawData.meshletVisibilityOffset + localMeshletIndex;
 
-	// Bit packing
+	// Bit packing, where 32 referes to uint bits
 	bool bPreviousVisibility = ((meshletVisibility[meshletVisibilityIndex / 32] >> (meshletVisibilityIndex % 32)) & 1u) == 1u;
 
 	bool bOcclusionCullingEnabled = perFrameData.bMeshletOcclusionCullingEnabled == 1;
@@ -131,25 +128,10 @@ void main()
 		}
 	}
 	
-	bool bDrawMeshlet = bPrepass || !bOcclusionCullingEnabled ? bVisible : bVisible && !bPreviousVisibility;
-	uvec4 drawMeshletBallot = subgroupBallot(bDrawMeshlet);
-	
-	if (bDrawMeshlet)
-	{
-		uint subgroupLocalMeshletIndex = subgroupBallotExclusiveBitCount(drawMeshletBallot);
-		outTask.meshletIndices[subgroupLocalMeshletIndex] = meshletIndex;
-	}
-	
-	if (groupThreadIndex == 0)
-	{
-		uint drawnMeshletCount = subgroupBallotBitCount(drawMeshletBallot);
-		gl_TaskCountNV = drawnMeshletCount;
-	}
-
+	// TODO-MILKRU: Ballot with group share memory optimisation?
 	if (!bPrepass && bOcclusionCullingEnabled)
 	{
-		// TODO-MILKRU: Ballot with group share memory optimisation?
-		// Bit packing
+		// Bit packing, where 32 referes to uint bits
 		if (bVisible)
 		{
 			atomicOr(meshletVisibility[meshletVisibilityIndex / 32], 1u << meshletVisibilityIndex % 32);
@@ -159,4 +141,16 @@ void main()
 			atomicAnd(meshletVisibility[meshletVisibilityIndex / 32], ~(1u << meshletVisibilityIndex % 32));
 		}
 	}
+	
+	bool bDrawMeshlet = bPrepass || !bOcclusionCullingEnabled ? bVisible : bVisible && !bPreviousVisibility;
+	uvec4 drawMeshletBallot = subgroupBallot(bDrawMeshlet);
+	
+	if (bDrawMeshlet)
+	{
+		uint subgroupLocalMeshletIndex = subgroupBallotExclusiveBitCount(drawMeshletBallot);
+		meshletIndices[subgroupLocalMeshletIndex] = meshletIndex;
+	}
+	
+	uint drawnMeshletCount = subgroupBallotBitCount(drawMeshletBallot);
+	EmitMeshTasksEXT(drawnMeshletCount, 1, 1);
 }
