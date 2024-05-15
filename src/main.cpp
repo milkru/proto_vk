@@ -22,11 +22,11 @@
 
 #ifdef DEBUG_
 const bool kbEnableValidationLayers = true;
+const bool kbEnableSyncValidation = true;
 #else
 const bool kbEnableValidationLayers = false;
+const bool kbEnableSyncValidation = false;
 #endif // DEBUG_
-
-const bool kbEnableMeshShadingPipeline = true;
 
 const u32 kPreferredSwapchainImageCount = 2;
 const bool kbEnableVSync = false;
@@ -80,9 +80,6 @@ i32 main(
 	i32 _argc,
 	const char** _argv)
 {
-	EASY_MAIN_THREAD;
-	EASY_PROFILER_ENABLE;
-
 	const char** meshPaths = _argv + 1;
 	u32 meshCount = u32(_argc - 1);
 	if (meshCount == 0)
@@ -98,7 +95,7 @@ i32 main(
 
 	Device device = createDevice(pWindow, {
 		.bEnableValidationLayers = kbEnableValidationLayers,
-		.bEnableMeshShadingPipeline = kbEnableMeshShadingPipeline });
+		.bEnableSyncValidation = kbEnableSyncValidation });
 
 	Swapchain swapchain{};
 
@@ -110,8 +107,6 @@ i32 main(
 
 	auto initializeSwapchainResources = [&]()
 	{
-		EASY_BLOCK("InitializeSwapchainResources");
-
 		{
 			Swapchain oldSwapchain = swapchain;
 
@@ -175,26 +170,20 @@ i32 main(
 		.aspect = f32(swapchain.extent.width) / f32(swapchain.extent.height),
 		.near = 0.01f,
 		.moveSpeed = 1.0f,
-		.boostMoveSpeed = 3.0f,
+		.boostMoveSpeed = 5.0f,
 		.sensitivity = 100.0f };
 
 	Shader generateDrawsShader = createShader(device, {
 		.pPath = "shaders/generate_draws.comp.spv",
 		.pEntry = "main" });
 
-	Shader taskShader = device.bMeshShadingPipelineAllowed ?
-		createShader(device, {
+	Shader taskShader = createShader(device, {
 			.pPath = "shaders/geometry.task.spv",
-			.pEntry = "main" }) : Shader();
+			.pEntry = "main" });
 
-	Shader meshShader = device.bMeshShadingPipelineAllowed ?
-		createShader(device, {
+	Shader meshShader = createShader(device, {
 			.pPath = "shaders/geometry.mesh.spv",
-			.pEntry = "main" }) : Shader();
-
-	Shader vertShader = createShader(device, {
-		.pPath = "shaders/geometry.vert.spv",
-		.pEntry = "main" });
+			.pEntry = "main" });
 
 	Shader fragShader = createShader(device, {
 		.pPath = "shaders/color.frag.spv",
@@ -207,22 +196,6 @@ i32 main(
 	Pipeline generateDrawsPipeline = createComputePipeline(device, generateDrawsShader);
 
 	Pipeline geometryPipeline = createGraphicsPipeline(device, {
-		.shaders = { vertShader, fragShader },
-		.attachmentLayout = {
-			.colorAttachments = { {
-				.format = swapchain.format,
-				.bBlendEnable = false } },
-			.depthStencilFormat = { depthTexture.format }},
-		.rasterization = {
-			.cullMode = VK_CULL_MODE_BACK_BIT,
-			.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE },
-		.depthStencil = {
-			.bDepthTestEnable = true,
-			.bDepthWriteEnable = true,
-			.depthCompareOp = VK_COMPARE_OP_GREATER } });
-
-	Pipeline geometryMeshletPipeline = device.bMeshShadingPipelineAllowed ?
-		createGraphicsPipeline(device, {
 			.shaders = { taskShader, meshShader, fragShader },
 			.attachmentLayout = {
 				.colorAttachments = { {
@@ -235,20 +208,14 @@ i32 main(
 			.depthStencil = {
 				.bDepthTestEnable = true,
 				.bDepthWriteEnable = true,
-				.depthCompareOp = VK_COMPARE_OP_GREATER } }) : Pipeline();
+				.depthCompareOp = VK_COMPARE_OP_GREATER } });
 
 	Pipeline hzbDownsamplePipeline = createComputePipeline(device, hzbDownsampleShader);
 
 	destroyShader(device, generateDrawsShader);
-
-	if (device.bMeshShadingPipelineAllowed)
-	{
-		destroyShader(device, meshShader);
-		destroyShader(device, taskShader);
-	}
-
+	destroyShader(device, meshShader);
+	destroyShader(device, taskShader);
 	destroyShader(device, fragShader);
-	destroyShader(device, vertShader);
 	destroyShader(device, hzbDownsampleShader);
 
 	GeometryBuffers geometryBuffers;
@@ -259,7 +226,7 @@ i32 main(
 		for (u32 meshIndex = 0; meshIndex < meshCount; ++meshIndex)
 		{
 			const char* meshPath = meshPaths[meshIndex];
-			loadMesh(geometry, meshPath, device.bMeshShadingPipelineAllowed);
+			loadMesh(geometry, meshPath);
 		}
 
 		geometryBuffers = createGeometryBuffers(device, geometry);
@@ -288,17 +255,20 @@ i32 main(
 		v4 freezeFrustumPlanes[kFrustumPlaneCount];
 		v4 cameraPosition;
 		v4 freezeCameraPosition;
+		u32 screenWidth;
+		u32 screenHeight;
 		u32 maxDrawCount;
 		f32 lodTransitionBase;
 		f32 lodTransitionStep;
 		i32 forcedLod;
 		u32 hzbSize;
-		i32 bMeshShadingPipelineEnabled;
 		i32 bMeshFrustumCullingEnabled;
 		i32 bMeshOcclusionCullingEnabled;
 		i32 bMeshletConeCullingEnabled;
 		i32 bMeshletFrustumCullingEnabled;
 		i32 bMeshletOcclusionCullingEnabled;
+		i32 bSmallTriangleCullingEnabled;
+		i32 bTriangleBackfaceCullingEnabled;
 	} perFrameData = {};
 
 	std::array<Buffer, kMaxFramesInFlightCount> perFrameDataBuffers;
@@ -313,22 +283,14 @@ i32 main(
 	gui::initialize(device, swapchain.format, depthTexture.format, (f32)kWindowWidth, (f32)kWindowHeight);
 
 	Settings settings = {
+		.forcedLod = kMaxMeshLods - 1,
 		.bEnableMeshFrustumCulling = true,
-		.bEnableMeshOcclusionCulling = true };
-
-	bool bMeshShadingPipelineEnabled =
-		settings.bEnableMeshletConeCulling =
-		settings.bEnableMeshletFrustumCulling =
-		settings.bEnableMeshletOcclusionCulling =
-		settings.bEnableMeshShadingPipeline =
-		settings.bMeshShadingPipelineSupported =
-		device.bMeshShadingPipelineAllowed;
-
-	uint32_t geometryShaderStages = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
-	if (device.bMeshShadingPipelineAllowed)
-	{
-		geometryShaderStages |= VK_PIPELINE_STAGE_TASK_SHADER_BIT_EXT | VK_PIPELINE_STAGE_MESH_SHADER_BIT_EXT;
-	}
+		.bEnableMeshOcclusionCulling = true,
+		.bEnableMeshletConeCulling = true,
+		.bEnableMeshletFrustumCulling = true,
+		.bEnableMeshletOcclusionCulling = true,
+		.bEnableSmallTriangleCulling = true,
+		.bEnableTriangleBackfaceCulling = true };
 
 	u32 frameIndex = 0;
 
@@ -358,7 +320,6 @@ i32 main(
 			});
 	};
 
-	// TODO-MILKRU: Split into two lambdas and put barriers inside
 	auto geometryPass = [&](
 		VkCommandBuffer _commandBuffer,
 		u32 _currentSwapchainImageIndex,
@@ -367,7 +328,7 @@ i32 main(
 		PerPassData perPassData = { .bPrepass = _bPrepass ? 1 : 0 };
 
 		executePass(_commandBuffer, {
-			.pipeline = bMeshShadingPipelineEnabled ? geometryMeshletPipeline : geometryPipeline,
+			.pipeline = geometryPipeline,
 			.viewport = {
 				.offset = { 0.0f, 0.0f },
 				.extent = { swapchain.extent.width, swapchain.extent.height }},
@@ -382,8 +343,7 @@ i32 main(
 				.texture = depthTexture,
 				.loadOp = _bPrepass ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
 				.clear = { 0.0f, 0 } },
-			.bindings = bMeshShadingPipelineEnabled ?
-				Bindings({
+			.bindings = {
 					Binding(perFrameDataBuffers[frameIndex]),
 					Binding(drawBuffers.drawsBuffer),
 					Binding(drawBuffers.drawCommandsBuffer),
@@ -393,31 +353,14 @@ i32 main(
 					Binding(geometryBuffers.meshletTrianglesBuffer),
 					Binding(geometryBuffers.vertexBuffer),
 					Binding(drawBuffers.meshletVisibilityBuffer),
-					Binding(hzb, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) }) :
-				Bindings({
-					Binding(perFrameDataBuffers[frameIndex]),
-					Binding(geometryBuffers.vertexBuffer),
-					Binding(drawBuffers.drawsBuffer),
-					Binding(drawBuffers.drawCommandsBuffer) }),
-			.pushConstants = bMeshShadingPipelineEnabled ?
-				PushConstants({
+					Binding(hzb, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) },
+			.pushConstants = {
 					.byteSize = sizeof(PerPassData),
-					.pData = &perPassData }) :
-				PushConstants() },
+					.pData = &perPassData } },
 			[&]()
 			{
-				if (bMeshShadingPipelineEnabled)
-				{
-					vkCmdDrawMeshTasksIndirectCountEXT(_commandBuffer, drawBuffers.drawCommandsBuffer.resource,
-						offsetof(DrawCommand, taskX), drawBuffers.drawCountBuffer.resource, 0, kMaxDrawCount, sizeof(DrawCommand));
-				}
-				else
-				{
-					vkCmdBindIndexBuffer(_commandBuffer, geometryBuffers.indexBuffer.resource, 0, VK_INDEX_TYPE_UINT32);
-
-					vkCmdDrawIndexedIndirectCount(_commandBuffer, drawBuffers.drawCommandsBuffer.resource,
-						offsetof(DrawCommand, indexCount), drawBuffers.drawCountBuffer.resource, 0, kMaxDrawCount, sizeof(DrawCommand));
-				}
+				vkCmdDrawMeshTasksIndirectCountEXT(_commandBuffer, drawBuffers.drawCommandsBuffer.resource,
+					offsetof(DrawCommand, taskX), drawBuffers.drawCountBuffer.resource, 0, kMaxDrawCount, sizeof(DrawCommand));
 			});
 	};
 
@@ -452,21 +395,14 @@ i32 main(
 
 	while (!glfwWindowShouldClose(pWindow))
 	{
-		EASY_BLOCK("Frame");
-
 		glfwPollEvents();
 
 		gui::newFrame(pWindow, settings);
 
-		bMeshShadingPipelineEnabled = settings.bEnableMeshShadingPipeline;
-
 		VkCommandBuffer commandBuffer = commandBuffers[frameIndex];
 		FramePacingState framePacingState = framePacingStates[frameIndex];
 
-		{
-			EASY_BLOCK("WaitForFences");
-			VK_CALL(vkWaitForFences(device.device, 1, &framePacingState.inFlightFence, VK_TRUE, UINT64_MAX));
-		}
+		VK_CALL(vkWaitForFences(device.device, 1, &framePacingState.inFlightFence, VK_TRUE, UINT64_MAX));
 
 		VkSurfaceCapabilitiesKHR surfaceCapabilities;
 		VK_CALL(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device.physicalDevice, device.surface, &surfaceCapabilities));
@@ -494,8 +430,6 @@ i32 main(
 			framePacingState.imageAvailableSemaphore, VK_NULL_HANDLE, &currentSwapchainImageIndex));
 
 		{
-			EASY_BLOCK("UpdateUniformData");
-
 			static auto previousTime = std::chrono::high_resolution_clock::now();
 			auto currentTime = std::chrono::high_resolution_clock::now();
 
@@ -507,17 +441,20 @@ i32 main(
 			perFrameData.view = camera.view;
 			perFrameData.projection = camera.projection;
 			perFrameData.cameraPosition = v4(camera.position, 0.0f);
+			perFrameData.screenWidth = swapchain.extent.width;
+			perFrameData.screenHeight = swapchain.extent.height;
 			perFrameData.maxDrawCount = kMaxDrawCount;
 			perFrameData.lodTransitionBase = 4.0f;
 			perFrameData.lodTransitionStep = 1.25f;
 			perFrameData.forcedLod = settings.bEnableForceMeshLod ? settings.forcedLod : -1;
 			perFrameData.hzbSize = hzbSize;
-			perFrameData.bMeshShadingPipelineEnabled = settings.bEnableMeshShadingPipeline ? 1 : 0;
 			perFrameData.bMeshFrustumCullingEnabled = settings.bEnableMeshFrustumCulling ? 1 : 0;
 			perFrameData.bMeshOcclusionCullingEnabled = settings.bEnableMeshOcclusionCulling ? 1 : 0;
 			perFrameData.bMeshletConeCullingEnabled = settings.bEnableMeshletConeCulling ? 1 : 0;
 			perFrameData.bMeshletFrustumCullingEnabled = settings.bEnableMeshletFrustumCulling ? 1 : 0;
 			perFrameData.bMeshletOcclusionCullingEnabled = settings.bEnableMeshletOcclusionCulling ? 1 : 0;
+			perFrameData.bSmallTriangleCullingEnabled = settings.bEnableSmallTriangleCulling ? 1 : 0;
+			perFrameData.bTriangleBackfaceCullingEnabled = settings.bEnableTriangleBackfaceCulling ? 1 : 0;
 
 			if (!settings.bEnableFreezeCamera)
 			{
@@ -530,8 +467,6 @@ i32 main(
 		}
 
 		{
-			EASY_BLOCK("Frame");
-
 			vkResetCommandBuffer(commandBuffer, 0);
 			VkCommandBufferBeginInfo commandBufferBeginInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
 
@@ -556,7 +491,7 @@ i32 main(
 
 					bufferBarrier(commandBuffer, device, drawBuffers.drawCommandsBuffer,
 						VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-						VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | geometryShaderStages, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+						VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_TASK_SHADER_BIT_EXT | VK_PIPELINE_STAGE_MESH_SHADER_BIT_EXT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
 					generateDrawsPass(commandBuffer, /*bPrepass*/ true);
 				}
@@ -570,7 +505,7 @@ i32 main(
 
 					bufferBarrier(commandBuffer, device, drawBuffers.drawCommandsBuffer,
 						VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_SHADER_READ_BIT,
-						VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | geometryShaderStages);
+						VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_TASK_SHADER_BIT_EXT | VK_PIPELINE_STAGE_MESH_SHADER_BIT_EXT);
 
 					geometryPass(commandBuffer, currentSwapchainImageIndex, /*bPrepass*/ true);
 				}
@@ -608,7 +543,7 @@ i32 main(
 
 					bufferBarrier(commandBuffer, device, drawBuffers.drawCommandsBuffer,
 						VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-						VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | geometryShaderStages, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+						VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_TASK_SHADER_BIT_EXT | VK_PIPELINE_STAGE_MESH_SHADER_BIT_EXT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
 					generateDrawsPass(commandBuffer, /*bPrepass*/ false);
 				}
@@ -622,7 +557,7 @@ i32 main(
 
 					bufferBarrier(commandBuffer, device, drawBuffers.drawCommandsBuffer,
 						VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_SHADER_READ_BIT,
-						VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | geometryShaderStages);
+						VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_TASK_SHADER_BIT_EXT | VK_PIPELINE_STAGE_MESH_SHADER_BIT_EXT);
 
 					geometryPass(commandBuffer, currentSwapchainImageIndex, /*bPrepass*/ false);
 				}
@@ -647,14 +582,9 @@ i32 main(
 		frameIndex = (frameIndex + 1) % kMaxFramesInFlightCount;
 	}
 
-	{
-		EASY_BLOCK("DeviceWaitIdle");
-		VK_CALL(vkDeviceWaitIdle(device.device));
-	}
+	VK_CALL(vkDeviceWaitIdle(device.device));
 
 	{
-		EASY_BLOCK("Cleanup");
-
 		gui::terminate();
 		gpu::profiler::terminate(device);
 
@@ -675,34 +605,10 @@ i32 main(
 			destroyTextureView(device, rHzbMip);
 		}
 
-		{ // TODO-MILKRU: Move to destroyGeometryBuffers
-			if (device.bMeshShadingPipelineAllowed)
-			{
-				destroyBuffer(device, geometryBuffers.meshletBuffer);
-				destroyBuffer(device, geometryBuffers.meshletVerticesBuffer);
-				destroyBuffer(device, geometryBuffers.meshletTrianglesBuffer);
-			}
-
-			destroyBuffer(device, geometryBuffers.vertexBuffer);
-			destroyBuffer(device, geometryBuffers.indexBuffer);
-			destroyBuffer(device, geometryBuffers.meshesBuffer);
-		}
-
-		{ // TODO-MILKRU: Move to destroyDrawBuffers
-			destroyBuffer(device, drawBuffers.drawsBuffer);
-			destroyBuffer(device, drawBuffers.drawCommandsBuffer);
-			destroyBuffer(device, drawBuffers.drawCountBuffer);
-			destroyBuffer(device, drawBuffers.meshVisibilityBuffer);
-			destroyBuffer(device, drawBuffers.meshletVisibilityBuffer);
-		}
+		destroyGeometryBuffers(device, geometryBuffers);
+		destroyDrawBuffers(device, drawBuffers);
 
 		destroyPipeline(device, hzbDownsamplePipeline);
-
-		if (device.bMeshShadingPipelineAllowed)
-		{
-			destroyPipeline(device, geometryMeshletPipeline);
-		}
-
 		destroyPipeline(device, geometryPipeline);
 		destroyPipeline(device, generateDrawsPipeline);
 
@@ -710,12 +616,6 @@ i32 main(
 		destroySwapchain(device, swapchain);
 		destroyDevice(device);
 		destroyWindow(pWindow);
-	}
-
-	{
-		const char* profileCaptureFileName = "cpu_profile_capture.prof";
-		profiler::dumpBlocksToFile(profileCaptureFileName);
-		printf("CPU profile capture saved to %s file.\n", profileCaptureFileName);
 	}
 
 	return EXIT_SUCCESS;

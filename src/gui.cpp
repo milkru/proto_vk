@@ -359,7 +359,7 @@ namespace gui
 		{
 			static bool bWindowHovered = false;
 
-			ImGui::SetNextWindowPos(ImVec2(25, 435), ImGuiCond_FirstUseEver);
+			ImGui::SetNextWindowPos(ImVec2(25, 370), ImGuiCond_FirstUseEver);
 			ImGui::SetNextWindowBgAlpha(bWindowHovered ? 0.8f : 0.4f);
 
 			ImGui::Begin("Settings", 0, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
@@ -371,19 +371,20 @@ namespace gui
 			ImGui::SameLine();
 			ImGui::SliderInt("##Forced Lod", &_rSettings.forcedLod, 0, kMaxMeshLods - 1);
 			ImGui::EndDisabled();
-			ImGui::Checkbox("Mesh Frustum Culling", &_rSettings.bEnableMeshFrustumCulling);
-			ImGui::Checkbox("Mesh Occlusion Culling", &_rSettings.bEnableMeshOcclusionCulling);
 			ImGui::Checkbox("Freeze Camera", &_rSettings.bEnableFreezeCamera);
 			ImGui::Separator();
 
-			ImGui::BeginDisabled(!_rSettings.bMeshShadingPipelineSupported);
-			ImGui::Checkbox("Mesh Shading Pipeline", &_rSettings.bEnableMeshShadingPipeline);
-			ImGui::BeginDisabled(!_rSettings.bEnableMeshShadingPipeline);
+			ImGui::Checkbox("Mesh Frustum Culling", &_rSettings.bEnableMeshFrustumCulling);
+			ImGui::Checkbox("Mesh Occlusion Culling", &_rSettings.bEnableMeshOcclusionCulling);
+			ImGui::Separator();
+
 			ImGui::Checkbox("Meshlet Cone Culling", &_rSettings.bEnableMeshletConeCulling);
 			ImGui::Checkbox("Meshlet Frustum Culling", &_rSettings.bEnableMeshletFrustumCulling);
 			ImGui::Checkbox("Meshlet Occlusion Culling", &_rSettings.bEnableMeshletOcclusionCulling);
-			ImGui::EndDisabled();
-			ImGui::EndDisabled();
+			ImGui::Separator();
+
+			ImGui::Checkbox("Small Triangle Culling", &_rSettings.bEnableSmallTriangleCulling);
+			ImGui::Checkbox("Triangle Back-face Culling", &_rSettings.bEnableTriangleBackfaceCulling);
 
 			ImGui::End();
 		}

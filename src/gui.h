@@ -8,15 +8,15 @@ struct Settings
 	u64 clippingInvocations = 0;
 	u64 deviceMemoryUsage = 0;
 	i32 forcedLod = 0;
-	bool bMeshShadingPipelineSupported = false;
 	bool bEnableForceMeshLod = false;
 	bool bEnableFreezeCamera = false;
-	bool bEnableMeshShadingPipeline = false;
 	bool bEnableMeshFrustumCulling = false;
 	bool bEnableMeshOcclusionCulling = false;
 	bool bEnableMeshletConeCulling = false;
 	bool bEnableMeshletFrustumCulling = false;
 	bool bEnableMeshletOcclusionCulling = false;
+	bool bEnableSmallTriangleCulling = false;
+	bool bEnableTriangleBackfaceCulling = false;
 };
 
 namespace gui

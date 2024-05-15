@@ -11,8 +11,6 @@ DrawBuffers createDrawBuffers(
 	u32 _maxDrawCount,
 	u32 _spawnCubeSize)
 {
-	EASY_BLOCK("InitializeDrawBuffers");
-
 	std::vector<PerDrawData> perDrawDataVector;
 	perDrawDataVector.reserve(_maxDrawCount);
 
@@ -62,10 +60,9 @@ DrawBuffers createDrawBuffers(
 			.byteSize = sizeof(u32) * perDrawDataVector.size(),
 			.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT }),
 
-		.meshletVisibilityBuffer = _rDevice.bMeshShadingPipelineAllowed ?
-			createBuffer(_rDevice, {
+		.meshletVisibilityBuffer = createBuffer(_rDevice, {
 				.byteSize = sizeof(u32) * u64(ceil(f32(meshletVisibilityBufferAllocator) / 32)), // Bit packing
-				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT }) : Buffer() };
+				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT }) };
 
 	immediateSubmit(_rDevice, [&](VkCommandBuffer _commandBuffer)
 		{
@@ -74,4 +71,15 @@ DrawBuffers createDrawBuffers(
 		});
 
 	return drawBuffers;
+}
+
+void destroyDrawBuffers(
+	Device& _rDevice,
+	DrawBuffers& _rDrawBuffers)
+{
+	destroyBuffer(_rDevice, _rDrawBuffers.drawsBuffer);
+	destroyBuffer(_rDevice, _rDrawBuffers.drawCommandsBuffer);
+	destroyBuffer(_rDevice, _rDrawBuffers.drawCountBuffer);
+	destroyBuffer(_rDevice, _rDrawBuffers.meshVisibilityBuffer);
+	destroyBuffer(_rDevice, _rDrawBuffers.meshletVisibilityBuffer);
 }

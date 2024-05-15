@@ -7,14 +7,14 @@
 #include <fast_obj.h>
 #include <meshoptimizer.h>
 
-// TODO-MILKRU: Use meshopt_optimizeMeshlet from new version
 // TODO-MILKRU: Small triangle and back-face triangle culling
-// TODO-MILKRU: Delete old pipeline?
-// TODO-MILKRU: Delete easy_profiler and use Superluminal for CPU profiling only
-// TODO-MILKRU: Geometry lazy serialization with runtime progress logging
+// TODO-MILKRU: Task command submission
+// TODO-MILKRU: Geometry lazy serialization with runtime progress logging. Use https://github.com/simdjson/simdjson
 // TODO-MILKRU: Dynamic LOD system
-// TODO-MILKRU: Task command submission can be re-purposed for continues LOD system, since many tasks are started, but few are used for drawing
+// 
 // TODO-MILKRU: Emulate task shaders in a compute shader? https://themaister.net/blog/2024/01/17/modernizing-granites-mesh-rendering/
+// TODO-MILKRU: Use meshopt_optimizeMeshlet once new meshoptimizer version is merged to vertex-lock branch
+// 
 // TODO-MILKRU: Implement Forward rendering with bindless, since overdraw with all of these geometry optimizations should be minimal. Check NSight overdraw view
 // TODO-MILKRU: Clustered light culling and binning. Check ACU, Doom and Doom Eternal implementations
 
@@ -103,8 +103,7 @@ static Meshlet buildMeshlet(
 // TODO-MILKRU: All mesh preprocessing can be done offline in CMake for example.
 void loadMesh(
 	Geometry& _rGeometry,
-	const char* _pFilePath,
-	bool _bMeshShadingSupported)
+	const char* _pFilePath)
 {
 	fastObjMesh* objMesh = fast_obj_read(_pFilePath);
 	assert(objMesh);
@@ -174,44 +173,42 @@ void loadMesh(
 		mesh.lods[lodIndex].indexCount = u32(indices.size());
 		_rGeometry.indices.insert(_rGeometry.indices.end(), indices.begin(), indices.end());
 
-		if (_bMeshShadingSupported)
+		size_t maxMeshlets = meshopt_buildMeshletsBound(indices.size(), kMaxVerticesPerMeshlet, kMaxTrianglesPerMeshlet);
+		std::vector<meshopt_Meshlet> meshlets(maxMeshlets);
+		std::vector<u32> meshletVertices(maxMeshlets * kMaxVerticesPerMeshlet);
+		std::vector<u8> meshletTriangles(maxMeshlets * kMaxTrianglesPerMeshlet * 3);
+
+		// TODO-MILKRU: After per-meshlet frustum/occlusion culling gets implemented, try playing around with cone_weight. You might get better performance.
+		size_t meshletCount = meshopt_buildMeshlets(meshlets.data(), meshletVertices.data(), meshletTriangles.data(), indices.data(), indices.size(),
+			&vertices[0].position[0], vertices.size(), sizeof(RawVertex), kMaxVerticesPerMeshlet, kMaxTrianglesPerMeshlet, /*cone_weight*/ 0.7f);
+
+		meshopt_Meshlet& rLastMeshlet = meshlets[meshletCount - 1];
+
+		meshletVertices.resize(rLastMeshlet.vertex_offset + size_t(rLastMeshlet.vertex_count));
+		meshletTriangles.resize(rLastMeshlet.triangle_offset + ((size_t(rLastMeshlet.triangle_count) * 3 + 3) & ~3));
+		meshlets.resize(meshletCount);
+
+		mesh.lods[lodIndex].meshletOffset = _rGeometry.meshlets.size();
+		mesh.lods[lodIndex].meshletCount = meshletCount;
+
+		u32 globalMeshletVerticesOffset = _rGeometry.meshletVertices.size();
+		u32 globalMeshletTrianglesOffset = _rGeometry.meshletTriangles.size();
+
+		_rGeometry.meshletVertices.insert(_rGeometry.meshletVertices.end(), meshletVertices.begin(), meshletVertices.end());
+		_rGeometry.meshletTriangles.insert(_rGeometry.meshletTriangles.end(), meshletTriangles.begin(), meshletTriangles.end());
+		_rGeometry.meshlets.reserve(_rGeometry.meshlets.size() + meshletCount);
+
+		for (u32 meshletIndex = 0; meshletIndex < meshlets.size(); ++meshletIndex)
 		{
-			size_t maxMeshlets = meshopt_buildMeshletsBound(indices.size(), kMaxVerticesPerMeshlet, kMaxTrianglesPerMeshlet);
-			std::vector<meshopt_Meshlet> meshlets(maxMeshlets);
-			std::vector<u32> meshletVertices(maxMeshlets * kMaxVerticesPerMeshlet);
-			std::vector<u8> meshletTriangles(maxMeshlets * kMaxTrianglesPerMeshlet * 3);
+			meshopt_Meshlet& rMeshlet = meshlets[meshletIndex];
 
-			// TODO-MILKRU: After per-meshlet frustum/occlusion culling gets implemented, try playing around with cone_weight. You might get better performance.
-			size_t meshletCount = meshopt_buildMeshlets(meshlets.data(), meshletVertices.data(), meshletTriangles.data(), indices.data(), indices.size(),
-				&vertices[0].position[0], vertices.size(), sizeof(RawVertex), kMaxVerticesPerMeshlet, kMaxTrianglesPerMeshlet, /*cone_weight*/ 0.7f);
+			meshopt_Bounds bounds = meshopt_computeMeshletBounds(&meshletVertices[rMeshlet.vertex_offset], &meshletTriangles[rMeshlet.triangle_offset],
+				rMeshlet.triangle_count, &vertices[0].position[0], vertices.size(), sizeof(RawVertex));
 
-			meshopt_Meshlet& rLastMeshlet = meshlets[meshletCount - 1];
+			rMeshlet.vertex_offset += globalMeshletVerticesOffset;
+			rMeshlet.triangle_offset += globalMeshletTrianglesOffset;
 
-			meshletVertices.resize(rLastMeshlet.vertex_offset + size_t(rLastMeshlet.vertex_count));
-			meshletTriangles.resize(rLastMeshlet.triangle_offset + ((size_t(rLastMeshlet.triangle_count) * 3 + 3) & ~3));
-			meshlets.resize(meshletCount);
-
-			mesh.lods[lodIndex].meshletOffset = _rGeometry.meshlets.size();
-			mesh.lods[lodIndex].meshletCount = meshletCount;
-
-			u32 globalMeshletVerticesOffset = _rGeometry.meshletVertices.size();
-			u32 globalMeshletTrianglesOffset = _rGeometry.meshletTriangles.size();
-
-			_rGeometry.meshletVertices.insert(_rGeometry.meshletVertices.end(), meshletVertices.begin(), meshletVertices.end());
-			_rGeometry.meshletTriangles.insert(_rGeometry.meshletTriangles.end(), meshletTriangles.begin(), meshletTriangles.end());
-			_rGeometry.meshlets.reserve(_rGeometry.meshlets.size() + meshletCount);
-
-			for (u32 meshletIndex = 0; meshletIndex < meshlets.size(); ++meshletIndex)
-			{
-				meshopt_Meshlet& rMeshlet = meshlets[meshletIndex];
-				meshopt_Bounds bounds = meshopt_computeMeshletBounds(&meshletVertices[rMeshlet.vertex_offset], &meshletTriangles[rMeshlet.triangle_offset],
-					rMeshlet.triangle_count, &vertices[0].position[0], vertices.size(), sizeof(RawVertex));
-
-				rMeshlet.vertex_offset += globalMeshletVerticesOffset;
-				rMeshlet.triangle_offset += globalMeshletTrianglesOffset;
-
-				_rGeometry.meshlets.push_back(buildMeshlet(rMeshlet, bounds));
-			}
+			_rGeometry.meshlets.push_back(buildMeshlet(rMeshlet, bounds));
 		}
 
 		++mesh.lodCount;
@@ -244,26 +241,21 @@ GeometryBuffers createGeometryBuffers(
 	Device& _rDevice,
 	Geometry& _rGeometry)
 {
-	EASY_BLOCK("InitializeGeometryBuffers");
-
 	return {
-		.meshletBuffer = _rDevice.bMeshShadingPipelineAllowed ?
-			createBuffer(_rDevice, {
+		.meshletBuffer = createBuffer(_rDevice, {
 				.byteSize = sizeof(Meshlet) * _rGeometry.meshlets.size(),
 				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-				.pContents = _rGeometry.meshlets.data() }) : Buffer(),
+				.pContents = _rGeometry.meshlets.data() }),
 
-		.meshletVerticesBuffer = _rDevice.bMeshShadingPipelineAllowed ?
-			createBuffer(_rDevice, {
+		.meshletVerticesBuffer = createBuffer(_rDevice, {
 				.byteSize = sizeof(u32) * _rGeometry.meshletVertices.size(),
 				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-				.pContents = _rGeometry.meshletVertices.data() }) : Buffer(),
+				.pContents = _rGeometry.meshletVertices.data() }),
 
-		.meshletTrianglesBuffer = _rDevice.bMeshShadingPipelineAllowed ?
-			createBuffer(_rDevice, {
+		.meshletTrianglesBuffer = createBuffer(_rDevice, {
 				.byteSize = sizeof(u8) * _rGeometry.meshletTriangles.size(),
 				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-				.pContents = _rGeometry.meshletTriangles.data() }) : Buffer(),
+				.pContents = _rGeometry.meshletTriangles.data() }),
 
 		.vertexBuffer = createBuffer(_rDevice, {
 			.byteSize = sizeof(Vertex) * _rGeometry.vertices.size(),
@@ -279,6 +271,18 @@ GeometryBuffers createGeometryBuffers(
 			.byteSize = sizeof(Mesh) * _rGeometry.meshes.size(),
 			.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
 			.pContents = _rGeometry.meshes.data() }) };
+}
+
+void destroyGeometryBuffers(
+	Device& _rDevice,
+	GeometryBuffers& _rGeometryBuffer)
+{
+	destroyBuffer(_rDevice, _rGeometryBuffer.meshletBuffer);
+	destroyBuffer(_rDevice, _rGeometryBuffer.meshletVerticesBuffer);
+	destroyBuffer(_rDevice, _rGeometryBuffer.meshletTrianglesBuffer);
+	destroyBuffer(_rDevice, _rGeometryBuffer.vertexBuffer);
+	destroyBuffer(_rDevice, _rGeometryBuffer.indexBuffer);
+	destroyBuffer(_rDevice, _rGeometryBuffer.meshesBuffer);
 }
 
 #if 0

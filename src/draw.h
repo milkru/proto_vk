@@ -9,12 +9,6 @@ struct alignas(16) PerDrawData
 
 struct DrawCommand
 {
-	u32 indexCount = 0;
-	u32 instanceCount = 0;
-	u32 firstIndex = 0;
-	u32 vertexOffset = 0;
-	u32 firstInstance = 0;
-
 	u32 taskX = 0;
 	u32 taskY = 0;
 	u32 taskZ = 0;
@@ -37,3 +31,7 @@ DrawBuffers createDrawBuffers(
 	Geometry& _rGeometry,
 	u32 _maxDrawCount,
 	u32 _spawnCubeSize);
+
+void destroyDrawBuffers(
+	Device& _rDevice,
+	DrawBuffers& _rDrawBuffers);

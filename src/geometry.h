@@ -64,9 +64,12 @@ struct GeometryBuffers
 
 void loadMesh(
 	Geometry& _rGeometry,
-	const char* _pFilePath,
-	bool _bMeshShadingSupported);
+	const char* _pFilePath);
 
 GeometryBuffers createGeometryBuffers(
 	Device& _rDevice,
 	Geometry& _rGeometry);
+
+void destroyGeometryBuffers(
+	Device& _rDevice,
+	GeometryBuffers& _rGeometryBuffer);

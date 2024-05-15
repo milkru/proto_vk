@@ -19,14 +19,13 @@ layout(binding = 5) readonly buffer MeshletVertices { uint meshletVertices[]; };
 layout(binding = 6) readonly buffer MeshletTriangles { uint8_t meshletTriangles[]; };
 layout(binding = 7) readonly buffer Vertices { Vertex vertices[]; };
 
-taskPayloadSharedEXT uint meshletIndices[kShaderGroupSize];
-
 layout(location = 0) out vec3 outColor[];
+
+taskPayloadSharedEXT uint meshletIndices[kShaderGroupSize];
+shared vec3 clipPositions[kMaxVerticesPerMeshlet];
 
 void main()
 {
-	// TODO-MILKRU: Implement backface and small triangle culling
-
 	uint groupIndex = gl_WorkGroupID.x;
 	uint groupThreadIndex = gl_LocalInvocationID.x;
 	uint meshletIndex = meshletIndices[groupIndex]; 
@@ -63,18 +62,59 @@ void main()
 
 		gl_MeshVerticesEXT[localVertexIndex].gl_Position = perFrameData.projection * perFrameData.view * worldPosition;
 		
+		vec4 freezeClipPosition = perFrameData.projection * perFrameData.freezeView * worldPosition;
+		clipPositions[localVertexIndex] = freezeClipPosition.xyz / freezeClipPosition.w;
+		
 		float shade = dot(normal, normalize(perFrameData.cameraPosition.xyz - worldPosition.xyz));
 		outColor[localVertexIndex] = shade * (0.5 * (meshletColor + 0.5 * normal + 0.5));
 	}
+	
+	vec2 screenSize = vec2(perFrameData.screenWidth, perFrameData.screenHeight);
+	
+	bool bSmallTriangleCullingEnabled = perFrameData.bSmallTriangleCullingEnabled == 1;
+	bool bBackfaceCullingEnabled = perFrameData.bTriangleBackfaceCullingEnabled == 1;
 
 	for (uint localTriangleIndex = groupThreadIndex;
 		localTriangleIndex < meshlets[meshletIndex].triangleCount;
 		localTriangleIndex += kShaderGroupSize)
 	{
-		gl_PrimitiveTriangleIndicesEXT[localTriangleIndex] = uvec3(
-			uint(meshletTriangles[meshlets[meshletIndex].triangleOffset + 3 * localTriangleIndex + 0]),
-			uint(meshletTriangles[meshlets[meshletIndex].triangleOffset + 3 * localTriangleIndex + 1]),
-			uint(meshletTriangles[meshlets[meshletIndex].triangleOffset + 3 * localTriangleIndex + 2]));
+		// Triangle culling:
+		// https://ubm-twvideo01.s3.amazonaws.com/o1/vault/gdc2016/Presentations/Wihlidal_Graham_OptimizingTheGraphics.pdf
+
+		bool bVisible = true;
+
+		uint triangleIndex0 = uint(meshletTriangles[meshlets[meshletIndex].triangleOffset + 3 * localTriangleIndex + 0]);
+		uint triangleIndex1 = uint(meshletTriangles[meshlets[meshletIndex].triangleOffset + 3 * localTriangleIndex + 1]);
+		uint triangleIndex2 = uint(meshletTriangles[meshlets[meshletIndex].triangleOffset + 3 * localTriangleIndex + 2]);
+
+		vec2 screenPosition0 = (0.5 + 0.5 * clipPositions[triangleIndex0]).xy * screenSize;
+		vec2 screenPosition1 = (0.5 + 0.5 * clipPositions[triangleIndex1]).xy * screenSize;
+		vec2 screenPosition2 = (0.5 + 0.5 * clipPositions[triangleIndex2]).xy * screenSize;
+		
+		if (bVisible && bSmallTriangleCullingEnabled)
+		{
+			float minX = min(min(screenPosition0.x, screenPosition1.x), screenPosition2.x);
+			float minY = min(min(screenPosition0.y, screenPosition1.y), screenPosition2.y);
+			float maxX = max(max(screenPosition0.x, screenPosition1.x), screenPosition2.x);
+			float maxY = max(max(screenPosition0.y, screenPosition1.y), screenPosition2.y);
+
+			// TODO-MILKRU: Add some small threshold for float imprecision?
+			bool bSmallTriangleCulled = round(minX) == round(maxX) || round(minY) == round(maxY);
+			bVisible = bVisible && !bSmallTriangleCulled;
+		}
+
+		if (bVisible && bBackfaceCullingEnabled)
+		{
+			vec3 edgeVector0 = vec3(screenPosition1 - screenPosition0, 0);
+			vec3 edgeVector1 = vec3(screenPosition2 - screenPosition1, 0);
+			vec3 triangleOrientation = cross(edgeVector0, edgeVector1);
+
+			bool bBackfaceCulled = triangleOrientation.z >= 0;
+			bVisible = bVisible && !bBackfaceCulled;
+		}
+		
+		gl_MeshPrimitivesEXT[localTriangleIndex].gl_CullPrimitiveEXT = !bVisible;
+		gl_PrimitiveTriangleIndicesEXT[localTriangleIndex] = uvec3(triangleIndex0, triangleIndex1, triangleIndex2);
 	}
 
 	SetMeshOutputsEXT(meshlets[meshletIndex].vertexCount, meshlets[meshletIndex].triangleCount);

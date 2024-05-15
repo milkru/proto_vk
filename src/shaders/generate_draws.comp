@@ -5,7 +5,6 @@
 #extension GL_EXT_shader_16bit_storage: require
 #extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
 #extension GL_KHR_shader_subgroup_ballot: require
-#extension GL_KHR_shader_subgroup_vote: require
 
 #include "shader_common.h"
 
@@ -38,7 +37,7 @@ void main()
 		return;
 	}
 	
-	bool bPrepass = subgroupAny(perPassData.bPrepass == 1);
+	bool bPrepass = perPassData.bPrepass == 1;
 
 	PerDrawData perDrawData = perDrawDataVector[drawIndex];
 	Mesh mesh = meshes[perDrawData.meshIndex];
@@ -54,53 +53,47 @@ void main()
 	bool bVisible = bPrepass ? meshVisibility[drawIndex] == 1 : true;
 
 	bool bFrustumCullingEnabled = perFrameData.bMeshFrustumCullingEnabled == 1;
-	if (subgroupAny(bFrustumCullingEnabled))
+	if (bVisible && bFrustumCullingEnabled)
 	{
-		if (bVisible)
+		bool bFrustumCulled = false;
+		
+		[[unroll]]
+		for(int i = 0; i < kFrustumPlaneCount; ++i)
 		{
-			bool bFrustumCulled = false;
-		
-			[[unroll]]
-			for(int i = 0; i < kFrustumPlaneCount; ++i)
-			{
-				bFrustumCulled = bFrustumCulled ||
-					dot(vec4(center, 1.0), perFrameData.freezeFrustumPlanes[i]) + mesh.radius < 0.0;
-			}
-		
-			bVisible = bVisible && !bFrustumCulled;
+			bFrustumCulled = bFrustumCulled ||
+				dot(vec4(center, 1.0), perFrameData.freezeFrustumPlanes[i]) + mesh.radius < 0.0;
 		}
+		
+		bVisible = bVisible && !bFrustumCulled;
 	}
 	
 	if (!bPrepass)
 	{
 		bool bOcclusionCullingEnabled = perFrameData.bMeshOcclusionCullingEnabled == 1;
-		if (subgroupAny(bOcclusionCullingEnabled))
+		if (bVisible && bOcclusionCullingEnabled)
 		{
-			if (bVisible)
+			vec3 centerViewSpace = (perFrameData.freezeView * vec4(center, 1.0)).xyz;
+			float P00 = perFrameData.projection[0][0];
+			float P11 = perFrameData.projection[1][1];
+			float zNear = perFrameData.projection[3][2];
+			vec4 AABB;
+
+			if (tryCalculateSphereBounds(centerViewSpace, mesh.radius, zNear, P00, P11, AABB))
 			{
-				vec3 centerViewSpace = (perFrameData.freezeView * vec4(center, 1.0)).xyz;
-				float P00 = perFrameData.projection[0][0];
-				float P11 = perFrameData.projection[1][1];
-				float zNear = perFrameData.projection[3][2];
-				vec4 AABB;
+				float boundsWidth = (AABB.z - AABB.x) * float(perFrameData.hzbSize);
+				float boundsHeight = (AABB.w - AABB.y) * float(perFrameData.hzbSize);
+				float mipIndex = floor(log2(max(boundsWidth, boundsHeight)));
 
-				if (tryCalculateSphereBounds(centerViewSpace, mesh.radius, zNear, P00, P11, AABB))
-				{
-					float boundsWidth = (AABB.z - AABB.x) * float(perFrameData.hzbSize);
-					float boundsHeight = (AABB.w - AABB.y) * float(perFrameData.hzbSize);
-					float mipIndex = floor(log2(max(boundsWidth, boundsHeight)));
+				float occluderDepth = textureLod(hzb, 0.5 * (AABB.xy + AABB.zw), mipIndex).x;
+				float nearestBoundsDepth = zNear / (-centerViewSpace.z - mesh.radius);
 
-					float occluderDepth = textureLod(hzb, 0.5 * (AABB.xy + AABB.zw), mipIndex).x;
-					float nearestBoundsDepth = zNear / (-centerViewSpace.z - mesh.radius);
-
-					bool bOcclusionCulled = occluderDepth >= nearestBoundsDepth;
-					bVisible = bVisible && !bOcclusionCulled;
-				}
+				bool bOcclusionCulled = occluderDepth >= nearestBoundsDepth;
+				bVisible = bVisible && !bOcclusionCulled;
 			}
 		}
 	}
 	
-	bool bMeshletOcclusionCullingEnabled = perFrameData.bMeshletOcclusionCullingEnabled == 1 && perFrameData.bMeshShadingPipelineEnabled == 1;
+	bool bMeshletOcclusionCullingEnabled = perFrameData.bMeshletOcclusionCullingEnabled == 1;
 	bool bDrawMesh = bPrepass || bMeshletOcclusionCullingEnabled ? bVisible : bVisible && meshVisibility[drawIndex] == 0;
 	uvec4 drawMeshBallot = subgroupBallot(bDrawMesh);
 
@@ -126,12 +119,6 @@ void main()
 	if (bDrawMesh)
 	{
 		DrawCommand drawCommand;
-		drawCommand.indexCount = meshLod.indexCount;
-		drawCommand.instanceCount = 1;
-		drawCommand.firstIndex = meshLod.firstIndex;
-		drawCommand.vertexOffset = mesh.vertexOffset;
-		drawCommand.firstInstance = 0;
-
 		drawCommand.taskX = (meshLod.meshletCount + kShaderGroupSize - 1) / kShaderGroupSize;
 		drawCommand.taskY = 1;
 		drawCommand.taskZ = 1;

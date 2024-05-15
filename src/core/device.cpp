@@ -4,10 +4,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#define SYNCHRONIZATION_VALIDATION 1 && _DEBUG
-
 static VkInstance createInstance(
-	bool _bEnableValidationLayers)
+	bool _bEnableValidationLayers,
+	bool _bEnableSyncValidation)
 {
 	const char* validationLayers[] =
 	{
@@ -50,15 +49,18 @@ static VkInstance createInstance(
 	instanceCreateInfo.enabledExtensionCount = ARRAY_SIZE(instanceExtensions);
 	instanceCreateInfo.ppEnabledExtensionNames = instanceExtensions;
 
-#if SYNCHRONIZATION_VALIDATION
+#ifdef _DEBUG
 	VkValidationFeatureEnableEXT enabledValidationFeatures[] = { VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT };
 
 	VkValidationFeaturesEXT validationFeatures = { VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT };
 	validationFeatures.enabledValidationFeatureCount = ARRAY_SIZE(enabledValidationFeatures);
 	validationFeatures.pEnabledValidationFeatures = enabledValidationFeatures;
 
-	instanceCreateInfo.pNext = &validationFeatures;
-#endif // SYNCHRONIZATION_VALIDATION
+	if (_bEnableSyncValidation)
+	{
+		instanceCreateInfo.pNext = &validationFeatures;
+	}
+#endif // _DEBUG
 
 	VkInstance instance;
 	VK_CALL(vkCreateInstance(&instanceCreateInfo, nullptr, &instance));
@@ -141,7 +143,8 @@ static const char* kRequiredDeviceExtensions[] =
 	VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
 	VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
 	VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
-	VK_EXT_MEMORY_BUDGET_EXTENSION_NAME
+	VK_EXT_MEMORY_BUDGET_EXTENSION_NAME,
+	VK_EXT_MESH_SHADER_EXTENSION_NAME
 };
 
 static bool isDeviceExtensionAvailable(
@@ -222,36 +225,11 @@ static VkPhysicalDevice tryPickPhysicalDevice(
 	return physicalDevice;
 }
 
-static bool isMeshShadingPipelineSupported(
-	VkPhysicalDevice _physicalDevice)
-{
-	u32 extensionCount;
-
-	vkEnumerateDeviceExtensionProperties(_physicalDevice, nullptr, &extensionCount, nullptr);
-	std::vector<VkExtensionProperties> extensions(extensionCount);
-	vkEnumerateDeviceExtensionProperties(_physicalDevice, nullptr, &extensionCount, extensions.data());
-
-	for (VkExtensionProperties& extension : extensions)
-	{
-		if (strcmp(extension.extensionName, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0)
-		{
-			return true;
-		}
-	}
-
-	return false;
-}
-
 static VkDevice createDevice(
 	VkPhysicalDevice _physicalDevice,
-	u32 _queueFamilyIndex,
-	bool _bMeshShadingAllowed)
+	u32 _queueFamilyIndex)
 {
 	std::vector<const char*> deviceExtensions(kRequiredDeviceExtensions, std::end(kRequiredDeviceExtensions));
-	if (_bMeshShadingAllowed)
-	{
-		deviceExtensions.push_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
-	}
 
 	f32 queuePriority = 1.0f;
 	VkDeviceQueueCreateInfo queueCreateInfo = { VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO };
@@ -285,18 +263,14 @@ static VkDevice createDevice(
 	VkDeviceCreateInfo deviceCreateInfo = { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
 	deviceCreateInfo.queueCreateInfoCount = 1;
 	deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo;
-	deviceCreateInfo.enabledExtensionCount = deviceExtensions.size();
-	deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
+	deviceCreateInfo.enabledExtensionCount = ARRAY_SIZE(kRequiredDeviceExtensions);
+	deviceCreateInfo.ppEnabledExtensionNames = kRequiredDeviceExtensions;
 
 	deviceCreateInfo.pNext = &deviceFeatures2;
 	deviceFeatures2.pNext = &deviceFeatures11;
 	deviceFeatures11.pNext = &deviceFeatures12;
 	deviceFeatures12.pNext = &dynamicRenderingFeatures;
-
-	if (_bMeshShadingAllowed)
-	{
-		dynamicRenderingFeatures.pNext = &meshShaderFeatures;
-	}
+	dynamicRenderingFeatures.pNext = &meshShaderFeatures;
 
 	VkDevice device;
 	VK_CALL(vkCreateDevice(_physicalDevice, &deviceCreateInfo, nullptr, &device));
@@ -374,7 +348,7 @@ Device createDevice(
 
 	Device device{};
 
-	device.instance = createInstance(_desc.bEnableValidationLayers);
+	device.instance = createInstance(_desc.bEnableValidationLayers, _desc.bEnableSyncValidation);
 	device.debugMessenger = createDebugMessenger(device.instance, _desc.bEnableValidationLayers);
 	device.surface = createSurface(_pWindow, device.instance);
 	
@@ -384,8 +358,7 @@ Device createDevice(
 	device.graphicsQueue.index = tryGetGraphicsQueueFamilyIndex(device.physicalDevice);
 	assert(device.graphicsQueue.index != ~0u);
 
-	device.bMeshShadingPipelineAllowed = _desc.bEnableMeshShadingPipeline && isMeshShadingPipelineSupported(device.physicalDevice);
-	device.device = createDevice(device.physicalDevice, device.graphicsQueue.index, device.bMeshShadingPipelineAllowed);
+	device.device = createDevice(device.physicalDevice, device.graphicsQueue.index);
 
 	vkGetDeviceQueue(device.device, device.graphicsQueue.index, 0, &device.graphicsQueue.queue);
 

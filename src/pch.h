@@ -3,7 +3,6 @@
 #include <volk.h>
 #include <vk_mem_alloc.h>
 #include <GLFW/glfw3.h>
-#include <easy/profiler.h>
 
 #define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>

@@ -39,17 +39,20 @@ struct PerFrameData
 	vec4 freezeFrustumPlanes[kFrustumPlaneCount];
 	vec4 cameraPosition;
 	vec4 freezeCameraPosition;
+	uint screenWidth;
+	uint screenHeight;
 	uint maxDrawCount;
 	float lodTransitionBase;
 	float lodTransitionStep;
 	int forcedLod;
 	uint hzbSize;
-	int bMeshShadingPipelineEnabled;
 	int bMeshFrustumCullingEnabled;
 	int bMeshOcclusionCullingEnabled;
 	int bMeshletConeCullingEnabled;
 	int bMeshletFrustumCullingEnabled;
 	int bMeshletOcclusionCullingEnabled;
+	int bSmallTriangleCullingEnabled;
+	int bTriangleBackfaceCullingEnabled;
 };
 
 struct PerPassData
@@ -83,12 +86,6 @@ struct PerDrawData
 
 struct DrawCommand
 {
-	uint indexCount;
-	uint instanceCount;
-	uint firstIndex;
-	uint vertexOffset;
-	uint firstInstance;
-
 	uint taskX;
 	uint taskY;
 	uint taskZ;

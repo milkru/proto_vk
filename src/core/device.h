@@ -16,13 +16,12 @@ struct Device
 	Queue graphicsQueue{};
 	VmaAllocator allocator = VK_NULL_HANDLE;
 	VkCommandPool commandPool = VK_NULL_HANDLE;
-	bool bMeshShadingPipelineAllowed = false;
 };
 
 struct DeviceDesc
 {
-	bool bEnableValidationLayers = false;    // Enable Vulkan's validation layer if supported.
-	bool bEnableMeshShadingPipeline = true;  // Enable mesh shading pipeline if supported.
+	bool bEnableValidationLayers = false;  // Enable Vulkan's validation layer.
+	bool bEnableSyncValidation = false;    // Enable synchronization validations.
 };
 
 Device createDevice(

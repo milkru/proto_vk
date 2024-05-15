@@ -92,20 +92,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE meshoptimizer)
 
 set_property(TARGET meshoptimizer PROPERTY FOLDER "3rdparty")
 
-message("Adding easy_profiler:")
-
-set(EASY_PROFILER_DIR 3rdparty/easy_profiler)
-
-set(EASY_PROFILER_NO_GUI ON CACHE BOOL "")
-set(EASY_PROFILER_NO_SAMPLES ON CACHE BOOL "")
-
-add_subdirectory(${EASY_PROFILER_DIR})
-target_include_directories(${PROJECT_NAME} PRIVATE ${EASY_PROFILER_DIR}/include)
-target_link_libraries(${PROJECT_NAME} PRIVATE easy_profiler)
-
-set_property(TARGET easy_profiler PROPERTY FOLDER "3rdparty/easy_profiler")
-set_property(TARGET profiler_converter PROPERTY FOLDER "3rdparty/easy_profiler")
-
 message("Adding imgui:")
 
 set(IMGUI_DIR 3rdparty/imgui)

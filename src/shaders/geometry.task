@@ -6,7 +6,6 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
 #extension GL_EXT_mesh_shader: require
 #extension GL_KHR_shader_subgroup_ballot: require
-#extension GL_KHR_shader_subgroup_vote: require
 
 #include "shader_common.h"
 
@@ -46,7 +45,7 @@ void main()
 		return;
 	}
 	
-	bool bPrepass = subgroupAny(perPassData.bPrepass == 1);
+	bool bPrepass = perPassData.bPrepass == 1;
 
 	vec3 center = (perDrawData.model * vec4(
 		meshlets[meshletIndex].center[0],
@@ -73,57 +72,48 @@ void main()
 	bool bVisible = bPrepass && bOcclusionCullingEnabled ? bPreviousVisibility : true;
 	
 	bool bConeCullingEnabled = perFrameData.bMeshletConeCullingEnabled == 1;
-	if (subgroupAny(bConeCullingEnabled))
+	if (bVisible && bConeCullingEnabled)
 	{
-		if (bVisible)
-		{
-			bool bConeCulled = dot(normalize(center - cameraPosition), coneAxis) >= coneCutoff;
-			bVisible = bVisible && !bConeCulled;
-		}
+		bool bConeCulled = dot(normalize(center - cameraPosition), coneAxis) >= coneCutoff;
+		bVisible = bVisible && !bConeCulled;
 	}
 	
 	bool bFrustumCullingEnabled = perFrameData.bMeshletFrustumCullingEnabled == 1;
-	if (subgroupAny(bFrustumCullingEnabled))
+	if (bVisible && bFrustumCullingEnabled)
 	{
-		if (bVisible)
+		bool bFrustumCulled = false;
+
+		[[unroll]]
+		for(int i = 0; i < kFrustumPlaneCount; ++i)
 		{
-			bool bFrustumCulled = false;
-
-			[[unroll]]
-			for(int i = 0; i < kFrustumPlaneCount; ++i)
-			{
-				bFrustumCulled = bFrustumCulled ||
-					dot(vec4(center, 1.0), perFrameData.freezeFrustumPlanes[i]) + meshlets[meshletIndex].radius < 0.0;
-			}
-
-			bVisible = bVisible && !bFrustumCulled;
+			bFrustumCulled = bFrustumCulled ||
+				dot(vec4(center, 1.0), perFrameData.freezeFrustumPlanes[i]) + meshlets[meshletIndex].radius < 0.0;
 		}
+
+		bVisible = bVisible && !bFrustumCulled;
 	}
 
 	if (!bPrepass)
 	{
-		if (subgroupAny(bOcclusionCullingEnabled))
+		if (bVisible && bOcclusionCullingEnabled)
 		{
-			if (bVisible)
+			vec3 centerViewSpace = (perFrameData.freezeView * vec4(center, 1.0)).xyz;
+			float P00 = perFrameData.projection[0][0];
+			float P11 = perFrameData.projection[1][1];
+			float zNear = perFrameData.projection[3][2];
+			vec4 AABB;
+
+			if (tryCalculateSphereBounds(centerViewSpace, meshlets[meshletIndex].radius, zNear, P00, P11, AABB))
 			{
-				vec3 centerViewSpace = (perFrameData.freezeView * vec4(center, 1.0)).xyz;
-				float P00 = perFrameData.projection[0][0];
-				float P11 = perFrameData.projection[1][1];
-				float zNear = perFrameData.projection[3][2];
-				vec4 AABB;
+				float boundsWidth = (AABB.z - AABB.x) * float(perFrameData.hzbSize);
+				float boundsHeight = (AABB.w - AABB.y) * float(perFrameData.hzbSize);
+				float mipIndex = floor(log2(max(boundsWidth, boundsHeight)));
 
-				if (tryCalculateSphereBounds(centerViewSpace, meshlets[meshletIndex].radius, zNear, P00, P11, AABB))
-				{
-					float boundsWidth = (AABB.z - AABB.x) * float(perFrameData.hzbSize);
-					float boundsHeight = (AABB.w - AABB.y) * float(perFrameData.hzbSize);
-					float mipIndex = floor(log2(max(boundsWidth, boundsHeight)));
+				float occluderDepth = textureLod(hzb, 0.5 * (AABB.xy + AABB.zw), mipIndex).x;
+				float nearestBoundsDepth = zNear / (-centerViewSpace.z - meshlets[meshletIndex].radius);
 
-					float occluderDepth = textureLod(hzb, 0.5 * (AABB.xy + AABB.zw), mipIndex).x;
-					float nearestBoundsDepth = zNear / (-centerViewSpace.z - meshlets[meshletIndex].radius);
-
-					bool bOcclusionCulled = occluderDepth >= nearestBoundsDepth;
-					bVisible = bVisible && !bOcclusionCulled;
-				}
+				bool bOcclusionCulled = occluderDepth >= nearestBoundsDepth;
+				bVisible = bVisible && !bOcclusionCulled;
 			}
 		}
 	}
