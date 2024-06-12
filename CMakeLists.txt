@@ -174,3 +174,8 @@ target_link_libraries(metis PRIVATE GKlib)
 
 set_property(TARGET metis PROPERTY FOLDER "3rdparty")
 set_property(TARGET GKlib PROPERTY FOLDER "3rdparty")
+
+message("Adding rapidjson:")
+
+set(RAPID_JSON_DIR 3rdparty/rapidjson/include)
+target_include_directories(${PROJECT_NAME} PRIVATE ${RAPID_JSON_DIR})

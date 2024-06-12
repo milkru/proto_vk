@@ -25,8 +25,6 @@ layout (push_constant) uniform block
     PerPassData perPassData;
 };
 
-shared uint drawOffset;
-
 void main()
 {
 	uint groupThreadIndex = gl_LocalInvocationID.x;
@@ -64,12 +62,12 @@ void main()
 				dot(vec4(center, 1.0), perFrameData.freezeFrustumPlanes[i]) + mesh.radius < 0.0;
 		}
 		
-		bVisible = bVisible && !bFrustumCulled;
+		bVisible = !bFrustumCulled;
 	}
 	
+	bool bOcclusionCullingEnabled = perFrameData.bMeshOcclusionCullingEnabled == 1;
 	if (!bPrepass)
 	{
-		bool bOcclusionCullingEnabled = perFrameData.bMeshOcclusionCullingEnabled == 1;
 		if (bVisible && bOcclusionCullingEnabled)
 		{
 			vec3 centerViewSpace = (perFrameData.freezeView * vec4(center, 1.0)).xyz;
@@ -88,7 +86,7 @@ void main()
 				float nearestBoundsDepth = zNear / (-centerViewSpace.z - mesh.radius);
 
 				bool bOcclusionCulled = occluderDepth >= nearestBoundsDepth;
-				bVisible = bVisible && !bOcclusionCulled;
+				bVisible = !bOcclusionCulled;
 			}
 		}
 	}
@@ -97,13 +95,13 @@ void main()
 	bool bDrawMesh = bPrepass || bMeshletOcclusionCullingEnabled ? bVisible : bVisible && meshVisibility[drawIndex] == 0;
 	uvec4 drawMeshBallot = subgroupBallot(bDrawMesh);
 
-	if (groupThreadIndex == 0)
+	uint drawOffset;
+	if (subgroupElect())
 	{
 		uint drawMeshCount = subgroupBallotBitCount(drawMeshBallot);
 		drawOffset = atomicAdd(drawCount, drawMeshCount);
 	}
-
-	subgroupMemoryBarrierShared();
+	drawOffset = subgroupBroadcastFirst(drawOffset);
 
 	float meshToCameraDistance = distance(center, perFrameData.freezeCameraPosition.xyz);
 	uint lodIndex = uint(max(1.0 +
@@ -125,6 +123,7 @@ void main()
 
 		drawCommand.drawIndex = drawIndex;
 		drawCommand.lodIndex = lodIndex;
+		drawCommand.meshVisibility = meshVisibility[drawIndex];
 		
 		uint drawMeshIndex = subgroupBallotExclusiveBitCount(drawMeshBallot);
 
@@ -132,7 +131,6 @@ void main()
 		drawCommands[drawCommandIndex] = drawCommand;
 	}
 	
-	// TODO-MILKRU: If bOcclusionCullingEnabled is enabled as well
 	if (!bPrepass)
 	{
 		meshVisibility[drawIndex] = bVisible ? 1 : 0;

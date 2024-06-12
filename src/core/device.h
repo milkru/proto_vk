@@ -20,8 +20,8 @@ struct Device
 
 struct DeviceDesc
 {
-	bool bEnableValidationLayers = false;  // Enable Vulkan's validation layer.
-	bool bEnableSyncValidation = false;    // Enable synchronization validations.
+	bool bEnableValidationLayers = false;  // Enable Vulkan's validation layer
+	bool bEnableSyncValidation = false;    // Enable synchronization validations
 };
 
 Device createDevice(

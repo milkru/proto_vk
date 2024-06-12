@@ -57,6 +57,7 @@ struct GeometryBuffers
 	Buffer meshletBuffer{};
 	Buffer meshletVerticesBuffer{};
 	Buffer meshletTrianglesBuffer{};
+
 	Buffer vertexBuffer{};
 	Buffer indexBuffer{};
 	Buffer meshesBuffer{};

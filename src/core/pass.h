@@ -23,10 +23,10 @@ typedef std::initializer_list<Attachment> Attachments;
 
 union Binding
 {
-	explicit Binding(Buffer& _rBuffer);
-	// TODO-MILKRU: VK_EXT_descriptor_buffer should provide descriptorBufferImageLayoutIgnored.
-	// Then you can use implicit constructors here.
-	explicit Binding(Texture& _rTexture, VkImageLayout _layout);
+	// TODO-MILKRU: VK_EXT_descriptor_buffer should provide descriptorBufferImageLayoutIgnored
+	// Then you can use implicit constructors here
+	Binding(Texture& _rTexture, VkImageLayout _layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	Binding(Buffer& _rBuffer);
 
 	VkDescriptorImageInfo imageInfo;
 	VkDescriptorBufferInfo bufferInfo;
@@ -42,13 +42,13 @@ struct PushConstants
 
 struct PassDesc
 {
-	Pipeline pipeline{};                  // Graphics or Compute pipeline to execute.
-	Viewport viewport{};                  // [Graphics] Screen viewport.
-	Scissor scissor{};                    // [Graphics] Screen scissor.
-	Attachments colorAttachments;         // [Graphics] Color render targets for graphics pipeline.
-	Attachment depthStencilAttachment{};  // [Graphics] Depth buffer for graphics pipeline.
-	Bindings bindings;                    // [Optional] Resource bindings.
-	PushConstants pushConstants;          // [Optional] Uniform data.
+	Pipeline pipeline{};                  // [Graphics/Compute] Pipeline to execute
+	Viewport viewport{};                  // [Graphics] Screen viewport
+	Scissor scissor{};                    // [Graphics] Screen scissor
+	Attachments colorAttachments;         // [Graphics] Color render targets for graphics pipeline
+	Attachment depthStencilAttachment{};  // [Graphics] Depth buffer for graphics pipeline
+	Bindings bindings;                    // [Optional] Resource bindings
+	PushConstants pushConstants;          // [Optional] Uniform data
 };
 
 void executePass(

@@ -10,9 +10,9 @@ struct Swapchain
 
 struct SwapchainDesc
 {
-	bool bEnableVSync = true;                      // Enable vertical sync.
-	u32 preferredSwapchainImageCount = 2;          // Preferred number of swapchain images.
-	VkSwapchainKHR oldSwapchain = VK_NULL_HANDLE;  // [Optional] Old swapchain which can be used for faster creation.
+	bool bEnableVSync = true;                      // Enable vertical sync
+	u32 preferredSwapchainImageCount = 2;          // Preferred number of swapchain images
+	VkSwapchainKHR oldSwapchain = VK_NULL_HANDLE;  // [Optional] Old swapchain which can be used for faster creation
 };
 
 Swapchain createSwapchain(

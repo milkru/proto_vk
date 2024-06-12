@@ -5,7 +5,7 @@
 
 // TODO-MILKRU: Move these structs to interop as well
 
-// A structure has a scalar alignment equal to the largest scalar alignment of any of its members.
+// A structure has a scalar alignment equal to the largest scalar alignment of any of its members
 // https://www.khronos.org/registry/vulkan/specs/1.3-extensions/html/chap15.html#interfaces-resources-layout
 struct Vertex
 {
@@ -92,6 +92,7 @@ struct DrawCommand
 
 	uint drawIndex;
 	uint lodIndex;
+	uint meshVisibility;
 };
 
 vec3 getRandomColor(

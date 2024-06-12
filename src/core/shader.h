@@ -11,8 +11,8 @@ struct Shader
 
 struct ShaderDesc
 {
-	const char* pPath = "";       // Relative shader file path.
-	const char* pEntry = "main";  // Shader entry point.
+	const char* pPath = "";       // Relative shader file path
+	const char* pEntry = "main";  // Shader entry point
 };
 
 typedef std::initializer_list<Shader> Shaders;

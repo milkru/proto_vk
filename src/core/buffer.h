@@ -16,10 +16,10 @@ enum class MemoryAccess : u8
 
 struct BufferDesc
 {
-	u64 byteSize = 0;                            // Buffer size in bytes.
-	MemoryAccess access = MemoryAccess::Device;  // Buffer memory access.
-	VkBufferUsageFlags usage = 0;                // Buffer usage flags.
-	void* pContents = nullptr;                   // [Optional] Initial buffer contents.
+	u64 byteSize = 0;                            // Buffer size in bytes
+	MemoryAccess access = MemoryAccess::Device;  // Buffer memory access
+	VkBufferUsageFlags usage = 0;                // Buffer usage flags
+	void* pContents = nullptr;                   // [Optional] Initial buffer contents
 };
 
 Buffer createBuffer(

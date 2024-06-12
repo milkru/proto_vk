@@ -41,3 +41,6 @@
 	path = 3rdparty/meshoptimizer-cpp
 	url = https://github.com/Traverse-Research/meshoptimizer-cpp
 	branch = vertex-lock
+[submodule "3rdparty/rapidjson"]
+	path = 3rdparty/rapidjson
+	url = https://github.com/Tencent/rapidjson.git

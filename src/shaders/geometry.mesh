@@ -98,8 +98,10 @@ void main()
 			float maxX = max(max(screenPosition0.x, screenPosition1.x), screenPosition2.x);
 			float maxY = max(max(screenPosition0.y, screenPosition1.y), screenPosition2.y);
 
-			// TODO-MILKRU: Add some small threshold for float imprecision?
-			bool bSmallTriangleCulled = round(minX) == round(maxX) || round(minY) == round(maxY);
+			bool bSmallTriangleCulled =
+				uint(round(minX)) == uint(round(maxX)) ||
+				uint(round(minY)) == uint(round(maxY));
+
 			bVisible = bVisible && !bSmallTriangleCulled;
 		}
 

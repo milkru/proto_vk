@@ -229,8 +229,6 @@ static VkDevice createDevice(
 	VkPhysicalDevice _physicalDevice,
 	u32 _queueFamilyIndex)
 {
-	std::vector<const char*> deviceExtensions(kRequiredDeviceExtensions, std::end(kRequiredDeviceExtensions));
-
 	f32 queuePriority = 1.0f;
 	VkDeviceQueueCreateInfo queueCreateInfo = { VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO };
 	queueCreateInfo.queueFamilyIndex = _queueFamilyIndex;

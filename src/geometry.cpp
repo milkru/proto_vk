@@ -7,7 +7,6 @@
 #include <fast_obj.h>
 #include <meshoptimizer.h>
 
-// TODO-MILKRU: Small triangle and back-face triangle culling
 // TODO-MILKRU: Task command submission
 // TODO-MILKRU: Geometry lazy serialization with runtime progress logging. Use https://github.com/simdjson/simdjson
 // TODO-MILKRU: Dynamic LOD system

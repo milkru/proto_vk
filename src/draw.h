@@ -13,8 +13,10 @@ struct DrawCommand
 	u32 taskY = 0;
 	u32 taskZ = 0;
 
+	// TODO-MILKRU: Move this to a separate buffer instead
 	u32 drawIndex = 0;
 	u32 lodIndex = 0;
+	u32 meshVisibility = 0;
 };
 
 struct DrawBuffers

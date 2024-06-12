@@ -280,7 +280,7 @@ i32 main(
 			.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT });
 	}
 
-	gui::initialize(device, swapchain.format, depthTexture.format, (f32)kWindowWidth, (f32)kWindowHeight);
+	gui::initialize(device, swapchain.format, depthTexture.format, f32(kWindowWidth), f32(kWindowHeight));
 
 	Settings settings = {
 		.forcedLod = kMaxMeshLods - 1,
@@ -303,13 +303,13 @@ i32 main(
 		executePass(_commandBuffer, {
 			.pipeline = generateDrawsPipeline,
 			.bindings = {
-				Binding(perFrameDataBuffers[frameIndex]),
-				Binding(geometryBuffers.meshesBuffer),
-				Binding(drawBuffers.drawsBuffer),
-				Binding(drawBuffers.drawCommandsBuffer),
-				Binding(drawBuffers.drawCountBuffer),
-				Binding(drawBuffers.meshVisibilityBuffer),
-				Binding(hzb, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) },
+				perFrameDataBuffers[frameIndex],
+				geometryBuffers.meshesBuffer,
+				drawBuffers.drawsBuffer,
+				drawBuffers.drawCommandsBuffer,
+				drawBuffers.drawCountBuffer,
+				drawBuffers.meshVisibilityBuffer,
+				hzb },
 			.pushConstants = {
 				.byteSize = sizeof(PerPassData),
 				.pData = &perPassData } },
@@ -344,16 +344,16 @@ i32 main(
 				.loadOp = _bPrepass ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
 				.clear = { 0.0f, 0 } },
 			.bindings = {
-					Binding(perFrameDataBuffers[frameIndex]),
-					Binding(drawBuffers.drawsBuffer),
-					Binding(drawBuffers.drawCommandsBuffer),
-					Binding(geometryBuffers.meshletBuffer),
-					Binding(geometryBuffers.meshesBuffer),
-					Binding(geometryBuffers.meshletVerticesBuffer),
-					Binding(geometryBuffers.meshletTrianglesBuffer),
-					Binding(geometryBuffers.vertexBuffer),
-					Binding(drawBuffers.meshletVisibilityBuffer),
-					Binding(hzb, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) },
+					perFrameDataBuffers[frameIndex],
+					drawBuffers.drawsBuffer,
+					drawBuffers.drawCommandsBuffer,
+					geometryBuffers.meshletBuffer,
+					geometryBuffers.meshesBuffer,
+					geometryBuffers.meshletVerticesBuffer,
+					geometryBuffers.meshletTrianglesBuffer,
+					geometryBuffers.vertexBuffer,
+					drawBuffers.meshletVisibilityBuffer,
+					hzb },
 			.pushConstants = {
 					.byteSize = sizeof(PerPassData),
 					.pData = &perPassData } },
@@ -371,12 +371,13 @@ i32 main(
 		{
 			u32 hzbMipSize = hzbSize >> mipIndex;
 			Texture& rInputTexture = mipIndex == 0 ? depthTexture : hzbMips[mipIndex - 1];
+			Binding outputHzbMip = Binding(hzbMips[mipIndex], VK_IMAGE_LAYOUT_GENERAL);
 
 			executePass(_commandBuffer, {
 				.pipeline = hzbDownsamplePipeline,
 				.bindings = {
-					Binding(rInputTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
-					Binding(hzbMips[mipIndex], VK_IMAGE_LAYOUT_GENERAL) },
+					rInputTexture,
+					outputHzbMip },
 				.pushConstants = {
 					.byteSize = sizeof(hzbMipSize),
 					.pData = &hzbMipSize } },
