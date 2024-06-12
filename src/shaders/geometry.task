@@ -1,13 +1,11 @@
 #version 460
 
 #extension GL_EXT_control_flow_attributes: require
-#extension GL_EXT_shader_8bit_storage: require
-#extension GL_EXT_shader_16bit_storage: require
 #extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
 #extension GL_EXT_mesh_shader: require
 #extension GL_KHR_shader_subgroup_ballot: require
 
-#include "shader_common.h"
+#include "common.h"
 
 layout(local_size_x = kShaderGroupSize) in;
 
@@ -16,7 +14,7 @@ layout(binding = 1) readonly buffer PerDrawDataVector { PerDrawData perDrawDataV
 layout(binding = 2) readonly buffer DrawCommands { DrawCommand drawCommands[]; };
 layout(binding = 3) readonly buffer Meshlets { Meshlet meshlets[]; };
 layout(binding = 4) readonly buffer Meshes { Mesh meshes[]; };
-layout(binding = 8) buffer MeshletVisibility { uint meshletVisibility[]; };
+layout(binding = 8) buffer MeshletVisibility { u32 meshletVisibility[]; };
 layout(binding = 9) uniform sampler2D hzb;
 
 layout (push_constant) uniform block
@@ -24,21 +22,21 @@ layout (push_constant) uniform block
     PerPassData perPassData;
 };
 
-taskPayloadSharedEXT uint meshletIndices[kShaderGroupSize];
+taskPayloadSharedEXT u32 meshletIndices[kShaderGroupSize];
 
 void main()
 {
-	uint drawIndex = drawCommands[gl_DrawID].drawIndex;
+	u32 drawIndex = drawCommands[gl_DrawID].drawIndex;
 	PerDrawData perDrawData = perDrawDataVector[drawIndex];
 	
 	Mesh mesh = meshes[perDrawData.meshIndex];
 	
-	uint lodIndex = drawCommands[gl_DrawID].lodIndex;
+	u32 lodIndex = drawCommands[gl_DrawID].lodIndex;
 	MeshLod meshLod = mesh.lods[lodIndex];
 
-	uint groupThreadIndex = gl_LocalInvocationID.x;
-	uint localMeshletIndex = gl_GlobalInvocationID.x;
-	uint meshletIndex = meshLod.meshletOffset + localMeshletIndex;
+	u32 groupThreadIndex = gl_LocalInvocationID.x;
+	u32 localMeshletIndex = gl_GlobalInvocationID.x;
+	u32 meshletIndex = meshLod.meshletOffset + localMeshletIndex;
 	
 	if (localMeshletIndex >= meshLod.meshletCount)
 	{
@@ -47,23 +45,22 @@ void main()
 	
 	bool bPrepass = perPassData.bPrepass == 1;
 
-	vec3 center = (perDrawData.model * vec4(
+	v3 center = (perDrawData.model * v4(
 		meshlets[meshletIndex].center[0],
 		meshlets[meshletIndex].center[1],
 		meshlets[meshletIndex].center[2], 1.0)).xyz;
 	
-	// TODO-MILKRU: Multiply meshlet bounding spheres by scale.
-	// float scaledRadius = scale meshlets[meshletIndex].radius
+	// TODO-MILKRU: Multiply meshlet bounding spheres by scale
 
-	vec3 coneAxis = (perDrawData.model * vec4(
-		int(meshlets[meshletIndex].coneAxis[0]) / 127.0,
-		int(meshlets[meshletIndex].coneAxis[1]) / 127.0,
-		int(meshlets[meshletIndex].coneAxis[2]) / 127.0, 0.0)).xyz;
+	v3 coneAxis = (perDrawData.model * v4(
+		i32(meshlets[meshletIndex].coneAxis[0]) / 127.0,
+		i32(meshlets[meshletIndex].coneAxis[1]) / 127.0,
+		i32(meshlets[meshletIndex].coneAxis[2]) / 127.0, 0.0)).xyz;
 
-	vec3 cameraPosition = perFrameData.freezeCameraPosition.xyz;
-	float coneCutoff = int(meshlets[meshletIndex].coneCutoff) / 127.0;
+	v3 cameraPosition = perFrameData.freezeCameraPosition.xyz;
+	f32 coneCutoff = i32(meshlets[meshletIndex].coneCutoff) / 127.0;
 	
-	uint meshletVisibilityIndex = perDrawData.meshletVisibilityOffset + localMeshletIndex;
+	u32 meshletVisibilityIndex = perDrawData.meshletVisibilityOffset + localMeshletIndex;
 
 	// Bit packing, where 32 referes to uint bits
 	bool bPreviousVisibility = ((meshletVisibility[meshletVisibilityIndex / 32] >> (meshletVisibilityIndex % 32)) & 1u) == 1u;
@@ -85,10 +82,10 @@ void main()
 		bool bFrustumCulled = false;
 
 		[[unroll]]
-		for(int i = 0; i < kFrustumPlaneCount; ++i)
+		for (i32 i = 0; i < kFrustumPlaneCount; ++i)
 		{
 			bFrustumCulled = bFrustumCulled ||
-				dot(vec4(center, 1.0), perFrameData.freezeFrustumPlanes[i]) + meshlets[meshletIndex].radius < 0.0;
+				dot(v4(center, 1.0), perFrameData.freezeFrustumPlanes[i]) + meshlets[meshletIndex].radius < 0.0;
 		}
 
 		bVisible = !bFrustumCulled;
@@ -98,20 +95,20 @@ void main()
 	{
 		if (bVisible && bOcclusionCullingEnabled)
 		{
-			vec3 centerViewSpace = (perFrameData.freezeView * vec4(center, 1.0)).xyz;
-			float P00 = perFrameData.projection[0][0];
-			float P11 = perFrameData.projection[1][1];
-			float zNear = perFrameData.projection[3][2];
-			vec4 AABB;
+			v3 centerViewSpace = (perFrameData.freezeView * v4(center, 1.0)).xyz;
+			f32 P00 = perFrameData.projection[0][0];
+			f32 P11 = perFrameData.projection[1][1];
+			f32 zNear = perFrameData.projection[3][2];
+			v4 AABB;
 
 			if (tryCalculateSphereBounds(centerViewSpace, meshlets[meshletIndex].radius, zNear, P00, P11, AABB))
 			{
-				float boundsWidth = (AABB.z - AABB.x) * float(perFrameData.hzbSize);
-				float boundsHeight = (AABB.w - AABB.y) * float(perFrameData.hzbSize);
-				float mipIndex = floor(log2(max(boundsWidth, boundsHeight)));
+				f32 boundsWidth = (AABB.z - AABB.x) * f32(perFrameData.hzbSize);
+				f32 boundsHeight = (AABB.w - AABB.y) * f32(perFrameData.hzbSize);
+				f32 mipIndex = floor(log2(max(boundsWidth, boundsHeight)));
 
-				float occluderDepth = textureLod(hzb, 0.5 * (AABB.xy + AABB.zw), mipIndex).x;
-				float nearestBoundsDepth = zNear / (-centerViewSpace.z - meshlets[meshletIndex].radius);
+				f32 occluderDepth = textureLod(hzb, 0.5 * (AABB.xy + AABB.zw), mipIndex).x;
+				f32 nearestBoundsDepth = zNear / (-centerViewSpace.z - meshlets[meshletIndex].radius);
 
 				bool bOcclusionCulled = occluderDepth >= nearestBoundsDepth;
 				bVisible = !bOcclusionCulled;
@@ -134,14 +131,14 @@ void main()
 	}
 	
 	bool bDrawMeshlet = bPrepass || !bOcclusionCullingEnabled ? bVisible : bVisible && !bPreviousVisibility;
-	uvec4 drawMeshletBallot = subgroupBallot(bDrawMeshlet);
+	uv4 drawMeshletBallot = subgroupBallot(bDrawMeshlet);
 	
 	if (bDrawMeshlet)
 	{
-		uint subgroupLocalMeshletIndex = subgroupBallotExclusiveBitCount(drawMeshletBallot);
+		u32 subgroupLocalMeshletIndex = subgroupBallotExclusiveBitCount(drawMeshletBallot);
 		meshletIndices[subgroupLocalMeshletIndex] = meshletIndex;
 	}
 	
-	uint drawnMeshletCount = subgroupBallotBitCount(drawMeshletBallot);
+	u32 drawnMeshletCount = subgroupBallotBitCount(drawMeshletBallot);
 	EmitMeshTasksEXT(drawnMeshletCount, 1, 1);
 }

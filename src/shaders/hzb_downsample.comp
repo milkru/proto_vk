@@ -1,6 +1,6 @@
 #version 450
 
-#include "shader_interop.h"
+#include "common.h"
 
 layout(local_size_x = kShaderGroupSize) in;
 layout(local_size_y = kShaderGroupSize) in;
@@ -11,15 +11,15 @@ layout (binding = 1, r16f) writeonly uniform image2D outputTexture;
 
 layout (push_constant) uniform block
 {
-    uint hzbMipSize;
+    u32 hzbMipSize;
 };
 
 void main()
 {
-	ivec2 position = min(ivec2(gl_GlobalInvocationID.xy), ivec2(hzbMipSize - 1)); 
+	iv2 position = min(iv2(gl_GlobalInvocationID.xy), iv2(hzbMipSize - 1)); 
 
-	vec2 uv = (0.5 + vec2(position)) / float(hzbMipSize);
-	vec4 depth = texture(inputTexture, uv);
+	v2 uv = (0.5 + v2(position)) / f32(hzbMipSize);
+	v4 depth = texture(inputTexture, uv);
 
 	imageStore(outputTexture, position, depth);
 }

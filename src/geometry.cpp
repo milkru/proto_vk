@@ -1,14 +1,14 @@
 #include "core/device.h"
 #include "core/buffer.h"
 
-#include "shaders/shader_interop.h"
+#include "shader_interop.h"
 #include "geometry.h"
 
 #include <fast_obj.h>
 #include <meshoptimizer.h>
 
 // TODO-MILKRU: Task command submission
-// TODO-MILKRU: Geometry lazy serialization with runtime progress logging. Use https://github.com/simdjson/simdjson
+// TODO-MILKRU: Geometry lazy serialization with runtime progress logging
 // TODO-MILKRU: Dynamic LOD system
 // 
 // TODO-MILKRU: Emulate task shaders in a compute shader? https://themaister.net/blog/2024/01/17/modernizing-granites-mesh-rendering/
@@ -53,7 +53,7 @@ static Vertex quantizeVertex(
 {
 	Vertex vertex{};
 
-	// TODO-MILKRU: To snorm.
+	// TODO-MILKRU: To snorm
 	vertex.position[0] = meshopt_quantizeHalf(_rRawVertex.position[0]);
 	vertex.position[1] = meshopt_quantizeHalf(_rRawVertex.position[1]);
 	vertex.position[2] = meshopt_quantizeHalf(_rRawVertex.position[2]);
@@ -62,7 +62,7 @@ static Vertex quantizeVertex(
 	vertex.normal[1] = u8(meshopt_quantizeUnorm(_rRawVertex.normal[1], 8));
 	vertex.normal[2] = u8(meshopt_quantizeUnorm(_rRawVertex.normal[2], 8));
 
-	// TODO-MILKRU: To unorm.
+	// TODO-MILKRU: To unorm
 	vertex.texCoord[0] = meshopt_quantizeHalf(_rRawVertex.texCoord[0]);
 	vertex.texCoord[1] = meshopt_quantizeHalf(_rRawVertex.texCoord[1]);
 
@@ -99,7 +99,7 @@ static Meshlet buildMeshlet(
 	return meshlet;
 }
 
-// TODO-MILKRU: All mesh preprocessing can be done offline in CMake for example.
+// TODO-MILKRU: All mesh preprocessing can be done offline through CMake for example
 void loadMesh(
 	Geometry& _rGeometry,
 	const char* _pFilePath)
@@ -120,8 +120,6 @@ void loadMesh(
 		vertex.position[1] = objMesh->positions[3 * size_t(vertexIndex.p) + 1];
 		vertex.position[2] = objMesh->positions[3 * size_t(vertexIndex.p) + 2];
 
-		// TODO-MILKRU: We can calculate normals from depth buffer after first geometry phase.
-		// See Wicked engine article about this.
 		vertex.normal[0] = 0.5f + 0.5f * objMesh->normals[3 * size_t(vertexIndex.n) + 0];
 		vertex.normal[1] = 0.5f + 0.5f * objMesh->normals[3 * size_t(vertexIndex.n) + 1];
 		vertex.normal[2] = 0.5f + 0.5f * objMesh->normals[3 * size_t(vertexIndex.n) + 2];
@@ -131,9 +129,7 @@ void loadMesh(
 
 		vertices.push_back(vertex);
 	}
-
-	// TODO-MILKRU: All mesh preprocessing can be done offline in CMake for example.
-
+	
 	std::vector<u32> remapTable(objMesh->index_count);
 	size_t vertexCount = meshopt_generateVertexRemap(remapTable.data(), nullptr, objMesh->index_count,
 		vertices.data(), vertices.size(), sizeof(RawVertex));
@@ -177,7 +173,7 @@ void loadMesh(
 		std::vector<u32> meshletVertices(maxMeshlets * kMaxVerticesPerMeshlet);
 		std::vector<u8> meshletTriangles(maxMeshlets * kMaxTrianglesPerMeshlet * 3);
 
-		// TODO-MILKRU: After per-meshlet frustum/occlusion culling gets implemented, try playing around with cone_weight. You might get better performance.
+		// TODO-MILKRU: After per-meshlet frustum/occlusion culling gets implemented, try playing around with cone_weight. You might get better performance
 		size_t meshletCount = meshopt_buildMeshlets(meshlets.data(), meshletVertices.data(), meshletTriangles.data(), indices.data(), indices.size(),
 			&vertices[0].position[0], vertices.size(), sizeof(RawVertex), kMaxVerticesPerMeshlet, kMaxTrianglesPerMeshlet, /*cone_weight*/ 0.7f);
 

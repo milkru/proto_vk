@@ -1,7 +1,7 @@
 #include "core/device.h"
 #include "core/buffer.h"
 
-#include "shaders/shader_interop.h"
+#include "shader_interop.h"
 #include "geometry.h"
 #include "draw.h"
 

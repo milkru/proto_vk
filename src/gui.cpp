@@ -7,10 +7,11 @@
 #include "core/frame_pacing.h"
 #include "core/query.h"
 
+#include "settings.h"
 #include "gui.h"
 #include "window.h"
 #include "gpu_profiler.h"
-#include "shaders/shader_interop.h"
+#include "shader_interop.h"
 
 #include <algorithm>
 #include <stdio.h>
@@ -62,7 +63,7 @@ namespace gui
 				.addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
 				.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR } });
 
-		// TODO-MILKRU: This is basically the pContents from buffer. Implement similar for textures.
+		// TODO-MILKRU: This is basically the pContents from buffer. Implement similar for textures
 		VkDeviceSize uploadSize = VkDeviceSize(4u * textureWidth * textureHeight) * sizeof(char);
 
 		Buffer stagingBuffer = createBuffer(rContext.rDevice, {

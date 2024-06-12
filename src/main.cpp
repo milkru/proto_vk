@@ -10,9 +10,10 @@
 
 #include "window.h"
 #include "camera.h"
-#include "shaders/shader_interop.h"
+#include "shader_interop.h"
 #include "geometry.h"
 #include "draw.h"
+#include "settings.h"
 #include "gui.h"
 #include "gpu_profiler.h"
 #include "utils.h"
@@ -36,11 +37,6 @@ const u32 kWindowHeight = 1080;
 
 const u32 kMaxDrawCount = 1'000'000;
 const f32 kSpawnCubeSize = 150.0f;
-
-struct alignas(16) PerPassData
-{
-	int32_t bPrepass = 0;
-};
 
 static Texture createDepthTexture(
 	Device& _rDevice,
@@ -247,30 +243,7 @@ i32 main(
 
 	gpu::profiler::initialize(device);
 
-	struct alignas(16)
-	{
-		m4 view;
-		m4 freezeView;
-		m4 projection;
-		v4 freezeFrustumPlanes[kFrustumPlaneCount];
-		v4 cameraPosition;
-		v4 freezeCameraPosition;
-		u32 screenWidth;
-		u32 screenHeight;
-		u32 maxDrawCount;
-		f32 lodTransitionBase;
-		f32 lodTransitionStep;
-		i32 forcedLod;
-		u32 hzbSize;
-		i32 bMeshFrustumCullingEnabled;
-		i32 bMeshOcclusionCullingEnabled;
-		i32 bMeshletConeCullingEnabled;
-		i32 bMeshletFrustumCullingEnabled;
-		i32 bMeshletOcclusionCullingEnabled;
-		i32 bSmallTriangleCullingEnabled;
-		i32 bTriangleBackfaceCullingEnabled;
-	} perFrameData = {};
-
+	PerFrameData perFrameData{};
 	std::array<Buffer, kMaxFramesInFlightCount> perFrameDataBuffers;
 	for (Buffer& rPerFrameDataBuffer : perFrameDataBuffers)
 	{

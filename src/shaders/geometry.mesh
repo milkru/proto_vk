@@ -1,11 +1,9 @@
 #version 460
 
 #extension GL_EXT_control_flow_attributes: require
-#extension GL_EXT_shader_8bit_storage: require
-#extension GL_EXT_shader_16bit_storage: require
 #extension GL_EXT_mesh_shader: require
 
-#include "shader_common.h"
+#include "common.h"
 
 layout(local_size_x = kShaderGroupSize) in;
 layout(triangles, max_vertices = kMaxVerticesPerMeshlet, max_primitives = kMaxTrianglesPerMeshlet) out;
@@ -15,66 +13,66 @@ layout(binding = 1) readonly buffer PerDrawDataVector { PerDrawData perDrawDataV
 layout(binding = 2) readonly buffer DrawCommands { DrawCommand drawCommands[]; };
 layout(binding = 3) readonly buffer Meshlets { Meshlet meshlets[]; };
 layout(binding = 4) readonly buffer Meshes { Mesh meshes[]; };
-layout(binding = 5) readonly buffer MeshletVertices { uint meshletVertices[]; };
+layout(binding = 5) readonly buffer MeshletVertices { u32 meshletVertices[]; };
 layout(binding = 6) readonly buffer MeshletTriangles { uint8_t meshletTriangles[]; };
 layout(binding = 7) readonly buffer Vertices { Vertex vertices[]; };
 
-layout(location = 0) out vec3 outColor[];
+layout(location = 0) out v3 outColor[];
 
-taskPayloadSharedEXT uint meshletIndices[kShaderGroupSize];
-shared vec3 clipPositions[kMaxVerticesPerMeshlet];
+taskPayloadSharedEXT u32 meshletIndices[kShaderGroupSize];
+shared v3 clipPositions[kMaxVerticesPerMeshlet];
 
 void main()
 {
-	uint groupIndex = gl_WorkGroupID.x;
-	uint groupThreadIndex = gl_LocalInvocationID.x;
-	uint meshletIndex = meshletIndices[groupIndex]; 
+	u32 groupIndex = gl_WorkGroupID.x;
+	u32 groupThreadIndex = gl_LocalInvocationID.x;
+	u32 meshletIndex = meshletIndices[groupIndex]; 
 	
-	uint drawIndex = drawCommands[gl_DrawID].drawIndex;
+	u32 drawIndex = drawCommands[gl_DrawID].drawIndex;
 	PerDrawData perDrawData = perDrawDataVector[drawIndex];
 
-	vec3 meshletColor = getRandomColor(meshletIndex);
-	uint globalVertexOffset = meshes[perDrawData.meshIndex].vertexOffset;
+	v3 meshletColor = getRandomColor(meshletIndex);
+	u32 globalVertexOffset = meshes[perDrawData.meshIndex].vertexOffset;
 
-	for (uint localVertexIndex = groupThreadIndex;
+	for (u32 localVertexIndex = groupThreadIndex;
 		localVertexIndex < meshlets[meshletIndex].vertexCount;
 		localVertexIndex += kShaderGroupSize)
 	{
-		uint vertexIndex = globalVertexOffset + meshletVertices[meshlets[meshletIndex].vertexOffset + localVertexIndex];
+		u32 vertexIndex = globalVertexOffset + meshletVertices[meshlets[meshletIndex].vertexOffset + localVertexIndex];
 		
-		vec3 position = vec3(
+		v3 position = v3(
 			vertices[vertexIndex].position[0],
 			vertices[vertexIndex].position[1],
 			vertices[vertexIndex].position[2]);
 
-		vec4 worldPosition = perDrawData.model * vec4(position, 1.0);
+		v4 worldPosition = perDrawData.model * v4(position, 1.0);
 
-		vec3 normal = vec3(
-			int(vertices[vertexIndex].normal[0]),
-			int(vertices[vertexIndex].normal[1]),
-			int(vertices[vertexIndex].normal[2])) / 127.0 - 1.0;
+		v3 normal = v3(
+			i32(vertices[vertexIndex].normal[0]),
+			i32(vertices[vertexIndex].normal[1]),
+			i32(vertices[vertexIndex].normal[2])) / 127.0 - 1.0;
 			
-		normal = mat3(perDrawData.model) * normalize(normal);
+		normal = m3(perDrawData.model) * normalize(normal);
 
-		vec2 texCoord = vec2(
+		v2 texCoord = v2(
 			vertices[vertexIndex].texCoord[0],
 			vertices[vertexIndex].texCoord[1]);
 
 		gl_MeshVerticesEXT[localVertexIndex].gl_Position = perFrameData.projection * perFrameData.view * worldPosition;
 		
-		vec4 freezeClipPosition = perFrameData.projection * perFrameData.freezeView * worldPosition;
+		v4 freezeClipPosition = perFrameData.projection * perFrameData.freezeView * worldPosition;
 		clipPositions[localVertexIndex] = freezeClipPosition.xyz / freezeClipPosition.w;
 		
-		float shade = dot(normal, normalize(perFrameData.cameraPosition.xyz - worldPosition.xyz));
+		f32 shade = dot(normal, normalize(perFrameData.cameraPosition.xyz - worldPosition.xyz));
 		outColor[localVertexIndex] = shade * (0.5 * (meshletColor + 0.5 * normal + 0.5));
 	}
 	
-	vec2 screenSize = vec2(perFrameData.screenWidth, perFrameData.screenHeight);
+	v2 screenSize = v2(perFrameData.screenWidth, perFrameData.screenHeight);
 	
 	bool bSmallTriangleCullingEnabled = perFrameData.bSmallTriangleCullingEnabled == 1;
 	bool bBackfaceCullingEnabled = perFrameData.bTriangleBackfaceCullingEnabled == 1;
 
-	for (uint localTriangleIndex = groupThreadIndex;
+	for (u32 localTriangleIndex = groupThreadIndex;
 		localTriangleIndex < meshlets[meshletIndex].triangleCount;
 		localTriangleIndex += kShaderGroupSize)
 	{
@@ -83,40 +81,40 @@ void main()
 
 		bool bVisible = true;
 
-		uint triangleIndex0 = uint(meshletTriangles[meshlets[meshletIndex].triangleOffset + 3 * localTriangleIndex + 0]);
-		uint triangleIndex1 = uint(meshletTriangles[meshlets[meshletIndex].triangleOffset + 3 * localTriangleIndex + 1]);
-		uint triangleIndex2 = uint(meshletTriangles[meshlets[meshletIndex].triangleOffset + 3 * localTriangleIndex + 2]);
+		u32 triangleIndex0 = u32(meshletTriangles[meshlets[meshletIndex].triangleOffset + 3 * localTriangleIndex + 0]);
+		u32 triangleIndex1 = u32(meshletTriangles[meshlets[meshletIndex].triangleOffset + 3 * localTriangleIndex + 1]);
+		u32 triangleIndex2 = u32(meshletTriangles[meshlets[meshletIndex].triangleOffset + 3 * localTriangleIndex + 2]);
 
-		vec2 screenPosition0 = (0.5 + 0.5 * clipPositions[triangleIndex0]).xy * screenSize;
-		vec2 screenPosition1 = (0.5 + 0.5 * clipPositions[triangleIndex1]).xy * screenSize;
-		vec2 screenPosition2 = (0.5 + 0.5 * clipPositions[triangleIndex2]).xy * screenSize;
+		v2 screenPosition0 = (0.5 + 0.5 * clipPositions[triangleIndex0]).xy * screenSize;
+		v2 screenPosition1 = (0.5 + 0.5 * clipPositions[triangleIndex1]).xy * screenSize;
+		v2 screenPosition2 = (0.5 + 0.5 * clipPositions[triangleIndex2]).xy * screenSize;
 		
 		if (bVisible && bSmallTriangleCullingEnabled)
 		{
-			float minX = min(min(screenPosition0.x, screenPosition1.x), screenPosition2.x);
-			float minY = min(min(screenPosition0.y, screenPosition1.y), screenPosition2.y);
-			float maxX = max(max(screenPosition0.x, screenPosition1.x), screenPosition2.x);
-			float maxY = max(max(screenPosition0.y, screenPosition1.y), screenPosition2.y);
+			f32 minX = min(min(screenPosition0.x, screenPosition1.x), screenPosition2.x);
+			f32 minY = min(min(screenPosition0.y, screenPosition1.y), screenPosition2.y);
+			f32 maxX = max(max(screenPosition0.x, screenPosition1.x), screenPosition2.x);
+			f32 maxY = max(max(screenPosition0.y, screenPosition1.y), screenPosition2.y);
 
 			bool bSmallTriangleCulled =
-				uint(round(minX)) == uint(round(maxX)) ||
-				uint(round(minY)) == uint(round(maxY));
+				u32(round(minX)) == u32(round(maxX)) ||
+				u32(round(minY)) == u32(round(maxY));
 
 			bVisible = bVisible && !bSmallTriangleCulled;
 		}
 
 		if (bVisible && bBackfaceCullingEnabled)
 		{
-			vec3 edgeVector0 = vec3(screenPosition1 - screenPosition0, 0);
-			vec3 edgeVector1 = vec3(screenPosition2 - screenPosition1, 0);
-			vec3 triangleOrientation = cross(edgeVector0, edgeVector1);
+			v3 edgeVector0 = v3(screenPosition1 - screenPosition0, 0);
+			v3 edgeVector1 = v3(screenPosition2 - screenPosition1, 0);
+			v3 triangleOrientation = cross(edgeVector0, edgeVector1);
 
 			bool bBackfaceCulled = triangleOrientation.z >= 0;
 			bVisible = bVisible && !bBackfaceCulled;
 		}
 		
 		gl_MeshPrimitivesEXT[localTriangleIndex].gl_CullPrimitiveEXT = !bVisible;
-		gl_PrimitiveTriangleIndicesEXT[localTriangleIndex] = uvec3(triangleIndex0, triangleIndex1, triangleIndex2);
+		gl_PrimitiveTriangleIndicesEXT[localTriangleIndex] = uv3(triangleIndex0, triangleIndex1, triangleIndex2);
 	}
 
 	SetMeshOutputsEXT(meshlets[meshletIndex].vertexCount, meshlets[meshletIndex].triangleCount);

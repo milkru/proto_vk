@@ -1,12 +1,10 @@
 #version 460
 
 #extension GL_EXT_control_flow_attributes: require
-#extension GL_EXT_shader_8bit_storage: require
-#extension GL_EXT_shader_16bit_storage: require
 #extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
 #extension GL_KHR_shader_subgroup_ballot: require
 
-#include "shader_common.h"
+#include "common.h"
 
 layout(local_size_x = kShaderGroupSize) in;
 layout(local_size_y = 1) in;
@@ -16,8 +14,8 @@ layout(binding = 0) uniform UniformBufferObject { PerFrameData perFrameData; };
 layout(binding = 1) readonly buffer Meshes { Mesh meshes[]; };
 layout(binding = 2) readonly buffer PerDrawDataVector { PerDrawData perDrawDataVector[]; };
 layout(binding = 3) writeonly buffer DrawCommands { DrawCommand drawCommands[]; };
-layout(binding = 4) buffer DrawCount { uint drawCount; };
-layout(binding = 5) buffer MeshVisibility { uint meshVisibility[]; };
+layout(binding = 4) buffer DrawCount { u32 drawCount; };
+layout(binding = 5) buffer MeshVisibility { u32 meshVisibility[]; };
 layout(binding = 6) uniform sampler2D hzb;
 
 layout (push_constant) uniform block
@@ -27,8 +25,8 @@ layout (push_constant) uniform block
 
 void main()
 {
-	uint groupThreadIndex = gl_LocalInvocationID.x;
-	uint drawIndex = gl_GlobalInvocationID.x;
+	u32 groupThreadIndex = gl_LocalInvocationID.x;
+	u32 drawIndex = gl_GlobalInvocationID.x;
 
 	if (drawIndex >= perFrameData.maxDrawCount)
 	{
@@ -40,13 +38,12 @@ void main()
 	PerDrawData perDrawData = perDrawDataVector[drawIndex];
 	Mesh mesh = meshes[perDrawData.meshIndex];
 	
-	vec3 center = (perDrawData.model * vec4(
+	v3 center = (perDrawData.model * v4(
 		mesh.center[0],
 		mesh.center[1],
 		mesh.center[2], 1.0)).xyz;
 	
-	// TODO-MILKRU: Multiply mesh bounding spheres by scale.
-	// float scaledRadius = scale mesh.radius
+	// TODO-MILKRU: Multiply mesh bounding spheres by scale
 
 	bool bVisible = bPrepass ? meshVisibility[drawIndex] == 1 : true;
 
@@ -56,10 +53,10 @@ void main()
 		bool bFrustumCulled = false;
 		
 		[[unroll]]
-		for(int i = 0; i < kFrustumPlaneCount; ++i)
+		for (i32 i = 0; i < kFrustumPlaneCount; ++i)
 		{
 			bFrustumCulled = bFrustumCulled ||
-				dot(vec4(center, 1.0), perFrameData.freezeFrustumPlanes[i]) + mesh.radius < 0.0;
+				dot(v4(center, 1.0), perFrameData.freezeFrustumPlanes[i]) + mesh.radius < 0.0;
 		}
 		
 		bVisible = !bFrustumCulled;
@@ -70,20 +67,20 @@ void main()
 	{
 		if (bVisible && bOcclusionCullingEnabled)
 		{
-			vec3 centerViewSpace = (perFrameData.freezeView * vec4(center, 1.0)).xyz;
-			float P00 = perFrameData.projection[0][0];
-			float P11 = perFrameData.projection[1][1];
-			float zNear = perFrameData.projection[3][2];
-			vec4 AABB;
+			v3 centerViewSpace = (perFrameData.freezeView * v4(center, 1.0)).xyz;
+			f32 P00 = perFrameData.projection[0][0];
+			f32 P11 = perFrameData.projection[1][1];
+			f32 zNear = perFrameData.projection[3][2];
+			v4 AABB;
 
 			if (tryCalculateSphereBounds(centerViewSpace, mesh.radius, zNear, P00, P11, AABB))
 			{
-				float boundsWidth = (AABB.z - AABB.x) * float(perFrameData.hzbSize);
-				float boundsHeight = (AABB.w - AABB.y) * float(perFrameData.hzbSize);
-				float mipIndex = floor(log2(max(boundsWidth, boundsHeight)));
+				f32 boundsWidth = (AABB.z - AABB.x) * f32(perFrameData.hzbSize);
+				f32 boundsHeight = (AABB.w - AABB.y) * f32(perFrameData.hzbSize);
+				f32 mipIndex = floor(log2(max(boundsWidth, boundsHeight)));
 
-				float occluderDepth = textureLod(hzb, 0.5 * (AABB.xy + AABB.zw), mipIndex).x;
-				float nearestBoundsDepth = zNear / (-centerViewSpace.z - mesh.radius);
+				f32 occluderDepth = textureLod(hzb, 0.5 * (AABB.xy + AABB.zw), mipIndex).x;
+				f32 nearestBoundsDepth = zNear / (-centerViewSpace.z - mesh.radius);
 
 				bool bOcclusionCulled = occluderDepth >= nearestBoundsDepth;
 				bVisible = !bOcclusionCulled;
@@ -93,18 +90,18 @@ void main()
 	
 	bool bMeshletOcclusionCullingEnabled = perFrameData.bMeshletOcclusionCullingEnabled == 1;
 	bool bDrawMesh = bPrepass || bMeshletOcclusionCullingEnabled ? bVisible : bVisible && meshVisibility[drawIndex] == 0;
-	uvec4 drawMeshBallot = subgroupBallot(bDrawMesh);
+	uv4 drawMeshBallot = subgroupBallot(bDrawMesh);
 
-	uint drawOffset;
+	u32 drawOffset;
 	if (subgroupElect())
 	{
-		uint drawMeshCount = subgroupBallotBitCount(drawMeshBallot);
+		u32 drawMeshCount = subgroupBallotBitCount(drawMeshBallot);
 		drawOffset = atomicAdd(drawCount, drawMeshCount);
 	}
 	drawOffset = subgroupBroadcastFirst(drawOffset);
 
-	float meshToCameraDistance = distance(center, perFrameData.freezeCameraPosition.xyz);
-	uint lodIndex = uint(max(1.0 +
+	f32 meshToCameraDistance = distance(center, perFrameData.freezeCameraPosition.xyz);
+	u32 lodIndex = u32(max(1.0 +
 		log(meshToCameraDistance / perFrameData.lodTransitionBase) /
 		log(perFrameData.lodTransitionStep), 0.0));
 
@@ -125,9 +122,9 @@ void main()
 		drawCommand.lodIndex = lodIndex;
 		drawCommand.meshVisibility = meshVisibility[drawIndex];
 		
-		uint drawMeshIndex = subgroupBallotExclusiveBitCount(drawMeshBallot);
+		u32 drawMeshIndex = subgroupBallotExclusiveBitCount(drawMeshBallot);
 
-		uint drawCommandIndex = drawOffset + drawMeshIndex;
+		u32 drawCommandIndex = drawOffset + drawMeshIndex;
 		drawCommands[drawCommandIndex] = drawCommand;
 	}
 	
