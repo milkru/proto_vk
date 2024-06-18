@@ -75,7 +75,7 @@ DrawBuffers createDrawBuffers(
 
 void destroyDrawBuffers(
 	Device& _rDevice,
-	DrawBuffers& _rDrawBuffers)
+	_Out_ DrawBuffers& _rDrawBuffers)
 {
 	destroyBuffer(_rDevice, _rDrawBuffers.drawsBuffer);
 	destroyBuffer(_rDevice, _rDrawBuffers.drawCommandsBuffer);

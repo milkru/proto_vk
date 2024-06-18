@@ -29,7 +29,7 @@ Device createDevice(
 	DeviceDesc _desc);
 
 void destroyDevice(
-	Device& _rDevice);
+	_Out_ Device& _rDevice);
 
 VkCommandBuffer createCommandBuffer(
 	Device& _rDevice);

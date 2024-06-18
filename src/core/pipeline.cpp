@@ -334,7 +334,7 @@ Pipeline createComputePipeline(
 
 void destroyPipeline(
 	Device& _rDevice,
-	Pipeline& _rPipeline)
+	_Out_ Pipeline& _rPipeline)
 {
 	vkDestroyPipeline(_rDevice.device, _rPipeline.pipeline, nullptr);
 	vkDestroyDescriptorUpdateTemplate(_rDevice.device, _rPipeline.updateTemplate, nullptr);

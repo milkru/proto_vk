@@ -66,7 +66,7 @@ Buffer createBuffer(
 
 void destroyBuffer(
 	Device& _rDevice,
-	Buffer& _rBuffer)
+	_Out_ Buffer& _rBuffer)
 {
 	if (_rBuffer.pMappedData)
 	{

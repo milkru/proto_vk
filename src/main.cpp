@@ -80,7 +80,7 @@ i32 main(
 	u32 meshCount = u32(_argc - 1);
 	if (meshCount == 0)
 	{
-		printf("Provide mesh paths as command arguments.\n");
+		printf("Provide mesh paths as command line arguments.\n");
 		return EXIT_FAILURE;
 	}
 
@@ -101,7 +101,7 @@ i32 main(
 	Texture hzb{};
 	std::vector<Texture> hzbMips;
 
-	auto initializeSwapchainResources = [&]()
+	auto initializeSwapchainDependentResources = [&]()
 	{
 		{
 			Swapchain oldSwapchain = swapchain;
@@ -159,7 +159,7 @@ i32 main(
 		}
 	};
 
-	initializeSwapchainResources();
+	initializeSwapchainDependentResources();
 
 	Camera camera = {
 		.fov = 60.0f,
@@ -167,7 +167,7 @@ i32 main(
 		.near = 0.01f,
 		.moveSpeed = 1.0f,
 		.boostMoveSpeed = 5.0f,
-		.sensitivity = 100.0f };
+		.sensitivity = 300.0f };
 
 	Shader generateDrawsShader = createShader(device, {
 		.pPath = "shaders/generate_draws.comp.spv",
@@ -222,7 +222,7 @@ i32 main(
 		for (u32 meshIndex = 0; meshIndex < meshCount; ++meshIndex)
 		{
 			const char* meshPath = meshPaths[meshIndex];
-			loadMesh(geometry, meshPath);
+			loadMesh(meshPath, geometry);
 		}
 
 		geometryBuffers = createGeometryBuffers(device, geometry);
@@ -317,20 +317,20 @@ i32 main(
 				.loadOp = _bPrepass ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
 				.clear = { 0.0f, 0 } },
 			.bindings = {
-					perFrameDataBuffers[frameIndex],
-					drawBuffers.drawsBuffer,
-					drawBuffers.drawCommandsBuffer,
-					geometryBuffers.meshletBuffer,
-					geometryBuffers.meshesBuffer,
-					geometryBuffers.meshletVerticesBuffer,
-					geometryBuffers.meshletTrianglesBuffer,
-					geometryBuffers.vertexBuffer,
-					drawBuffers.meshletVisibilityBuffer,
-					hzb },
+				perFrameDataBuffers[frameIndex],
+				drawBuffers.drawsBuffer,
+				drawBuffers.drawCommandsBuffer,
+				geometryBuffers.meshletBuffer,
+				geometryBuffers.meshesBuffer,
+				geometryBuffers.meshletVerticesBuffer,
+				geometryBuffers.meshletTrianglesBuffer,
+				geometryBuffers.vertexBuffer,
+				drawBuffers.meshletVisibilityBuffer,
+				hzb },
 			.pushConstants = {
-					.byteSize = sizeof(PerPassData),
-					.pData = &perPassData } },
-			[&]()
+				.byteSize = sizeof(PerPassData),
+				.pData = &perPassData } },
+				[&]()
 			{
 				vkCmdDrawMeshTasksIndirectCountEXT(_commandBuffer, drawBuffers.drawCommandsBuffer.resource,
 					offsetof(DrawCommand, taskX), drawBuffers.drawCountBuffer.resource, 0, kMaxDrawCount, sizeof(DrawCommand));
@@ -392,7 +392,7 @@ i32 main(
 			swapchain.extent.height != currentExtent.height)
 		{
 			VK_CALL(vkDeviceWaitIdle(device.device));
-			initializeSwapchainResources();
+			initializeSwapchainDependentResources();
 
 			continue;
 		}
@@ -524,7 +524,7 @@ i32 main(
 
 				{
 					GPU_BLOCK(commandBuffer, "GeometryPass");
-					
+
 					bufferBarrier(commandBuffer, device, drawBuffers.drawCountBuffer,
 						VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
 						VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);

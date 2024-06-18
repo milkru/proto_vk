@@ -160,7 +160,7 @@ Swapchain createSwapchain(
 
 void destroySwapchain(
 	Device& _rDevice,
-	Swapchain& _rSwapchain)
+	_Out_ Swapchain& _rSwapchain)
 {
 	for (Texture& rTexture : _rSwapchain.textures)
 	{

@@ -28,7 +28,7 @@ Buffer createBuffer(
 
 void destroyBuffer(
 	Device& _rDevice,
-	Buffer& _rBuffer);
+	_Out_ Buffer& _rBuffer);
 
 void bufferBarrier(
 	VkCommandBuffer _commandBuffer,

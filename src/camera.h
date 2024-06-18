@@ -15,13 +15,16 @@ struct Camera
 
 	m4 view{};
 	m4 projection{};
+
+	bool bPanning = false;
+	dv2 panOrigin{};
 };
 
 void updateCamera(
 	GLFWwindow* _pWindow,
 	f32 _deltaTime,
-	Camera& _rCamera);
+	_Out_ Camera& _rCamera);
 
 void getFrustumPlanes(
 	Camera _camera,
-	v4* _pFrustumPlanes);
+	_Out_ v4* _pFrustumPlanes);

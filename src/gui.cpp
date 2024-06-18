@@ -297,7 +297,7 @@ namespace gui
 
 	void newFrame(
 		GLFWwindow* _pWindow,
-		Settings& _rSettings)
+		_Out_ Settings& _rSettings)
 	{
 		newGlfwFrame(_pWindow);
 
@@ -471,7 +471,7 @@ namespace gui
 
 	void updateGpuInfo(
 		Device& _rDevice,
-		Settings& _rSettings)
+		_Out_ Settings& _rSettings)
 	{
 		VkPhysicalDeviceMemoryBudgetPropertiesEXT deviceMemoryBudget = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT };
 		VkPhysicalDeviceMemoryProperties2 deviceMemoryProperties = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2 };

@@ -1,12 +1,10 @@
 #pragma once
 
-/*
-void serializeMesh(
+void trySerializeMesh(
 	const char* _pPath,
-	Mesh _mesh,
+	Mesh& _rMesh,
 	Geometry& _rGeometry);
 
-Mesh deserializeMesh(
+bool tryDeserializeMesh(
 	const char* _pPath,
-	Geometry& _rGeometry);
-*/
+	_Out_ Geometry& _rGeometry);

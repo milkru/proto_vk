@@ -23,8 +23,8 @@ struct GeometryBuffers
 };
 
 void loadMesh(
-	Geometry& _rGeometry,
-	const char* _pFilePath);
+	const char* _pFilePath,
+	_Out_ Geometry& _rGeometry);
 
 GeometryBuffers createGeometryBuffers(
 	Device& _rDevice,
@@ -32,4 +32,4 @@ GeometryBuffers createGeometryBuffers(
 
 void destroyGeometryBuffers(
 	Device& _rDevice,
-	GeometryBuffers& _rGeometryBuffer);
+	_Out_ GeometryBuffers& _rGeometryBuffer);

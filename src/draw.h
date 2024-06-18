@@ -17,4 +17,4 @@ DrawBuffers createDrawBuffers(
 
 void destroyDrawBuffers(
 	Device& _rDevice,
-	DrawBuffers& _rDrawBuffers);
+	_Out_ DrawBuffers& _rDrawBuffers);

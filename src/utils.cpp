@@ -2,21 +2,49 @@
 
 #include <stdio.h>
 
+bool fileExists(
+	const char* _pPath) {
+	if (FILE* file = fopen(_pPath, "r"))
+	{
+		fclose(file);
+		return true;
+	}
+
+	return false;
+}
+
 std::vector<char> readFile(
 	const char* _pFilePath)
 {
 	FILE* file = fopen(_pFilePath, "rb");
-	assert(file != nullptr);
+	if (file == nullptr)
+	{
+		return {};
+	}
 
 	fseek(file, 0L, SEEK_END);
 	size_t fileSize = ftell(file);
 	fseek(file, 0L, SEEK_SET);
 
 	std::vector<char> fileContents(fileSize);
-	size_t bytesToRead = fread(fileContents.data(), sizeof(u8), fileSize, file);
+	size_t bytesToRead = fread(fileContents.data(), sizeof(char), fileSize, file);
 	fclose(file);
 
 	return fileContents;
+}
+
+void writeFile(
+	const char* _pPath,
+	_Out_ std::string& _rContents)
+{
+	FILE* file = fopen(_pPath, "w");
+	assert(file != nullptr);
+
+	size_t fileByteCount = _rContents.size();
+	size_t bytesToWrite = fwrite(_rContents.c_str(), sizeof(char), fileByteCount, file);
+	assert(bytesToWrite == fileByteCount);
+
+	fclose(file);
 }
 
 m4 getInfinitePerspectiveMatrix(

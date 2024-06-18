@@ -33,7 +33,7 @@ GLFWwindow* createWindow(
 }
 
 void destroyWindow(
-	GLFWwindow* _pWindow)
+	_Out_ GLFWwindow* _pWindow)
 {
 	glfwDestroyWindow(_pWindow);
 	glfwTerminate();

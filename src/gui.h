@@ -13,7 +13,7 @@ namespace gui
 
 	void newFrame(
 		GLFWwindow* _pWindow,
-		Settings& _rSettings);
+		_Out_ Settings& _rSettings);
 
 	void drawFrame(
 		VkCommandBuffer _commandBuffer,
@@ -22,5 +22,5 @@ namespace gui
 
 	void updateGpuInfo(
 		Device& _rDevice,
-		Settings& _rSettings);
+		_Out_ Settings& _rSettings);
 }

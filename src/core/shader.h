@@ -23,4 +23,4 @@ Shader createShader(
 
 void destroyShader(
 	Device& _rDevice,
-	Shader& _rShader);
+	_Out_ Shader& _rShader);

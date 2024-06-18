@@ -46,6 +46,7 @@ struct Meshlet
 	u32 vertexCount;
 	u32 triangleCount;
 
+	// TODO-MILKRU: Quantize `center` to half vector3 by using meshopt_quantizeHalf. What about `radius`?
 	f32 center[3];
 	f32 radius;
 	i8 coneAxis[3];
@@ -54,8 +55,8 @@ struct Meshlet
 
 struct MeshLod
 {
-	u32 indexCount;
 	u32 firstIndex;
+	u32 indexCount;
 	u32 meshletOffset;
 	u32 meshletCount;
 };
@@ -63,6 +64,7 @@ struct MeshLod
 struct Mesh
 {
 	u32 vertexOffset;
+	u32 vertexCount;
 	f32 center[3];
 	f32 radius;
 	u32 lodCount;

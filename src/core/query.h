@@ -29,11 +29,11 @@ QueryPool createQueryPool(
 
 void destroyQueryPool(
 	Device& _rDevice,
-	QueryPool& _rQueryPool);
+	_Out_ QueryPool& _rQueryPool);
 
 void resetQueryPool(
 	VkCommandBuffer _commandBuffer,
-	QueryPool& _rQueryPool);
+	_Out_ QueryPool& _rQueryPool);
 
 struct Queries
 {
@@ -42,8 +42,8 @@ struct Queries
 };
 
 Queries allocateQueries(
-	QueryPool& _rQueryPool,
-	u32 _count);
+	u32 _count,
+	_Out_ QueryPool& _rQueryPool);
 
 void writeTimestamp(
 	VkCommandBuffer _commandBuffer,
@@ -63,7 +63,7 @@ void endQuery(
 
 void updateQueryPoolResults(
 	Device& _rDevice,
-	QueryPool& _rQueryPool);
+	_Out_ QueryPool& _rQueryPool);
 
 u64 getQueryResult(
 	QueryPool& _rQueryPool,

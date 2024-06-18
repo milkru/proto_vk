@@ -80,7 +80,7 @@ namespace gpu::profiler
 
 		if (gContext.namedBlockQueries.find(_name) == gContext.namedBlockQueries.end())
 		{
-			gContext.namedBlockQueries[_name] = allocateQueries(gContext.timestampsQueryPool, /*queryCount*/ 2u);
+			gContext.namedBlockQueries[_name] = allocateQueries(/*queryCount*/ 2u, gContext.timestampsQueryPool);
 		}
 
 		queries = gContext.namedBlockQueries[_name];
@@ -99,7 +99,7 @@ namespace gpu::profiler
 	bool tryGetBlockResult(
 		const char* _name,
 		VkPhysicalDeviceLimits _limits,
-		f64& _rResult)
+		_Out_ f64& _rResult)
 	{
 		assert(gContext.namedBlockQueries.find(_name) != gContext.namedBlockQueries.end());
 
@@ -126,7 +126,7 @@ namespace gpu::profiler
 	{
 		if (gContext.namedStatsQueries.find(_name) == gContext.namedStatsQueries.end())
 		{
-			gContext.namedStatsQueries[_name] = allocateQueries(gContext.statisticsQueryPool, /*queryCount*/ 1);
+			gContext.namedStatsQueries[_name] = allocateQueries(/*queryCount*/ 1, gContext.statisticsQueryPool);
 		}
 
 		queries = gContext.namedStatsQueries[_name];
@@ -141,7 +141,7 @@ namespace gpu::profiler
 	bool tryGetStatsResult(
 		const char* _name,
 		StatType _type,
-		u64& _rResult)
+		_Out_ u64& _rResult)
 	{
 		if (gContext.statisticsQueryPool.status != QueryPoolStatus::Available)
 		{

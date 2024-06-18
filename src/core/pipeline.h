@@ -53,4 +53,4 @@ Pipeline createComputePipeline(
 
 void destroyPipeline(
 	Device& _rDevice,
-	Pipeline& _rPipeline);
+	_Out_ Pipeline& _rPipeline);

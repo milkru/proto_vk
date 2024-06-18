@@ -11,4 +11,4 @@ GLFWwindow* createWindow(
 	WindowDesc _desc);
 
 void destroyWindow(
-	GLFWwindow* _pWindow);
+	_Out_ GLFWwindow* _pWindow);

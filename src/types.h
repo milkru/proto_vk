@@ -19,6 +19,10 @@ typedef glm::vec2 v2;
 typedef glm::vec3 v3;
 typedef glm::vec4 v4;
 
+typedef glm::dvec2 dv2;
+typedef glm::dvec3 dv3;
+typedef glm::dvec4 dv4;
+
 typedef glm::ivec2 iv2;
 typedef glm::ivec3 iv3;
 typedef glm::ivec4 iv4;

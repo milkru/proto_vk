@@ -119,7 +119,7 @@ Shader createShader(
 
 void destroyShader(
 	Device&_rDevice,
-	Shader& _rShader)
+	_Out_ Shader& _rShader)
 {
 	vkDestroyShaderModule(_rDevice.device, _rShader.resource, nullptr);
 }

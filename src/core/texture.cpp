@@ -175,7 +175,7 @@ Texture createTexture(
 
 void destroyTexture(
 	Device& _rDevice,
-	Texture& _rTexture)
+	_Out_ Texture& _rTexture)
 {
 	vkDestroyImageView(_rDevice.device, _rTexture.view, nullptr);
 	destroySampler(_rDevice, _rTexture.sampler);
@@ -205,7 +205,7 @@ Texture createTextureView(
 
 void destroyTextureView(
 	Device& _rDevice,
-	Texture& _rTexture)
+	_Out_ Texture& _rTexture)
 {
 	vkDestroyImageView(_rDevice.device, _rTexture.view, nullptr);
 	destroySampler(_rDevice, _rTexture.sampler);

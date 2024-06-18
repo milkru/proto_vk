@@ -30,7 +30,7 @@ namespace gpu::profiler
 	bool tryGetBlockResult(
 		const char* _name,
 		VkPhysicalDeviceLimits _limits,
-		f64& _rResult);
+		_Out_ f64& _rResult);
 
 	struct ScopedStats
 	{
@@ -46,7 +46,7 @@ namespace gpu::profiler
 	bool tryGetStatsResult(
 		const char* _name,
 		StatType _type,
-		u64& _rResult);
+		_Out_ u64& _rResult);
 }
 
 #ifndef UNIQUE_NAME

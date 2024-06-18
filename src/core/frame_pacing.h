@@ -14,4 +14,4 @@ FramePacingState createFramePacingState(
 
 void destroyFramePacingState(
 	Device& _rDevice,
-	FramePacingState& _rFramePacingState);
+	_Out_ FramePacingState& _rFramePacingState);

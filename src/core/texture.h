@@ -55,7 +55,7 @@ Texture createTexture(
 
 void destroyTexture(
 	Device& _rDevice,
-	Texture& _rTexture);
+	_Out_ Texture& _rTexture);
 
 Texture createTextureView(
 	Device& _rDevice,
@@ -63,7 +63,7 @@ Texture createTextureView(
 
 void destroyTextureView(
 	Device& _rDevice,
-	Texture& _rTexture);
+	_Out_ Texture& _rTexture);
 
 void textureBarrier(
 	VkCommandBuffer _commandBuffer,

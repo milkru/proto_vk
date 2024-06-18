@@ -53,7 +53,7 @@ QueryPool createQueryPool(
 
 void destroyQueryPool(
 	Device& _rDevice,
-	QueryPool& _rQueryPool)
+	_Out_ QueryPool& _rQueryPool)
 {
 	if (_rQueryPool.queryPoolVk != VK_NULL_HANDLE)
 	{
@@ -65,7 +65,7 @@ void destroyQueryPool(
 
 void resetQueryPool(
 	VkCommandBuffer _commandBuffer,
-	QueryPool& _rQueryPool)
+	_Out_ QueryPool& _rQueryPool)
 {
 	if (_rQueryPool.status == QueryPoolStatus::Available)
 	{
@@ -75,8 +75,8 @@ void resetQueryPool(
 }
 
 Queries allocateQueries(
-	QueryPool& _rQueryPool,
-	u32 _count)
+	u32 _count,
+	_Out_ QueryPool& _rQueryPool)
 {
 	assert(_count > 0);
 	assert(_rQueryPool.allocatedQueries + _count <= _rQueryPool.queryCapacity);
@@ -133,7 +133,7 @@ void endQuery(
 
 void updateQueryPoolResults(
 	Device& _rDevice,
-	QueryPool& _rQueryPool)
+	_Out_ QueryPool& _rQueryPool)
 {
 	if (_rQueryPool.allocatedQueries == 0)
 	{

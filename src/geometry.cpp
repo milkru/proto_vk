@@ -3,13 +3,13 @@
 
 #include "shader_interop.h"
 #include "geometry.h"
+#include "serializer.h"
 
 #include <fast_obj.h>
 #include <meshoptimizer.h>
 
-// TODO-MILKRU: Task command submission
-// TODO-MILKRU: Geometry lazy serialization with runtime progress logging
 // TODO-MILKRU: Dynamic LOD system
+// TODO-MILKRU: Task command submission
 // 
 // TODO-MILKRU: Emulate task shaders in a compute shader? https://themaister.net/blog/2024/01/17/modernizing-granites-mesh-rendering/
 // TODO-MILKRU: Use meshopt_optimizeMeshlet once new meshoptimizer version is merged to vertex-lock branch
@@ -28,7 +28,7 @@ struct RawVertex
 #endif // VERTEX_COLOR
 };
 
-// TODO-MILKRU: Implement a more conservative way of calculating bounding sphere
+// TODO-MILKRU: Implement a more conservative way of calculating bounding sphere with good performance in mind
 static v4 calculateMeshBounds(
 	std::vector<RawVertex>& _rVertices)
 {
@@ -51,59 +51,67 @@ static v4 calculateMeshBounds(
 static Vertex quantizeVertex(
 	RawVertex& _rRawVertex)
 {
-	Vertex vertex{};
+	return {
+		.position = {
+			meshopt_quantizeHalf(_rRawVertex.position[0]),
+			meshopt_quantizeHalf(_rRawVertex.position[1]),
+			meshopt_quantizeHalf(_rRawVertex.position[2]) },
 
-	// TODO-MILKRU: To snorm
-	vertex.position[0] = meshopt_quantizeHalf(_rRawVertex.position[0]);
-	vertex.position[1] = meshopt_quantizeHalf(_rRawVertex.position[1]);
-	vertex.position[2] = meshopt_quantizeHalf(_rRawVertex.position[2]);
+		// TODO-MILKRU: To snorm
+		.normal = {
+			u8(meshopt_quantizeUnorm(_rRawVertex.normal[0], 8)),
+			u8(meshopt_quantizeUnorm(_rRawVertex.normal[1], 8)),
+			u8(meshopt_quantizeUnorm(_rRawVertex.normal[2], 8)),
+			u8(0) }, // Free 8 bits for custom use
 
-	vertex.normal[0] = u8(meshopt_quantizeUnorm(_rRawVertex.normal[0], 8));
-	vertex.normal[1] = u8(meshopt_quantizeUnorm(_rRawVertex.normal[1], 8));
-	vertex.normal[2] = u8(meshopt_quantizeUnorm(_rRawVertex.normal[2], 8));
-
-	// TODO-MILKRU: To unorm
-	vertex.texCoord[0] = meshopt_quantizeHalf(_rRawVertex.texCoord[0]);
-	vertex.texCoord[1] = meshopt_quantizeHalf(_rRawVertex.texCoord[1]);
+		// TODO-MILKRU: To unorm
+		.texCoord = {
+			meshopt_quantizeHalf(_rRawVertex.texCoord[0]),
+			meshopt_quantizeHalf(_rRawVertex.texCoord[1]) },
 
 #ifdef VERTEX_COLOR
-	vertex.color[0] = meshopt_quantizeHalf(1.0f);
-	vertex.color[1] = meshopt_quantizeHalf(0.0f);
-	vertex.color[2] = meshopt_quantizeHalf(1.0f);
+		.color = {
+			meshopt_quantizeHalf(1.0f),
+			meshopt_quantizeHalf(0.0f),
+			meshopt_quantizeHalf(1.0f) }
 #endif // VERTEX_COLOR
-
-	return vertex;
+	};
 }
 
 static Meshlet buildMeshlet(
 	meshopt_Meshlet _meshlet,
 	meshopt_Bounds _bounds)
 {
-	Meshlet meshlet{};
+	return {
+		.vertexOffset = _meshlet.vertex_offset,
+		.triangleOffset = _meshlet.triangle_offset,
+		.vertexCount = _meshlet.vertex_count,
+		.triangleCount = _meshlet.triangle_count,
 
-	meshlet.vertexOffset = _meshlet.vertex_offset;
-	meshlet.triangleOffset = _meshlet.triangle_offset;
-	meshlet.vertexCount = _meshlet.vertex_count;
-	meshlet.triangleCount = _meshlet.triangle_count;
+		.center = {
+			_bounds.center[0],
+			_bounds.center[1],
+			_bounds.center[2] },
 
-	meshlet.center[0] = _bounds.center[0];
-	meshlet.center[1] = _bounds.center[1];
-	meshlet.center[2] = _bounds.center[2];
-	meshlet.radius = _bounds.radius;
+		.radius = _bounds.radius,
 
-	meshlet.coneAxis[0] = _bounds.cone_axis_s8[0];
-	meshlet.coneAxis[1] = _bounds.cone_axis_s8[1];
-	meshlet.coneAxis[2] = _bounds.cone_axis_s8[2];
-	meshlet.coneCutoff = _bounds.cone_cutoff_s8;
+		.coneAxis = {
+			_bounds.cone_axis_s8[0],
+			_bounds.cone_axis_s8[1],
+			_bounds.cone_axis_s8[2] },
 
-	return meshlet;
+		.coneCutoff = _bounds.cone_cutoff_s8 };
 }
 
-// TODO-MILKRU: All mesh preprocessing can be done offline through CMake for example
 void loadMesh(
-	Geometry& _rGeometry,
-	const char* _pFilePath)
+	const char* _pFilePath,
+	_Out_ Geometry& _rGeometry)
 {
+	if (tryDeserializeMesh(_pFilePath, _rGeometry))
+	{
+		return;
+	}
+
 	fastObjMesh* objMesh = fast_obj_read(_pFilePath);
 	assert(objMesh);
 
@@ -153,6 +161,7 @@ void loadMesh(
 	mesh.radius = meshBounds.w;
 
 	mesh.vertexOffset = u32(_rGeometry.vertices.size());
+	mesh.vertexCount = u32(vertices.size());
 	_rGeometry.vertices.reserve(_rGeometry.vertices.size() + vertices.size());
 
 	for (RawVertex& rVertex : vertices)
@@ -230,6 +239,8 @@ void loadMesh(
 	}
 
 	_rGeometry.meshes.push_back(mesh);
+
+	trySerializeMesh(_pFilePath, mesh, _rGeometry);
 }
 
 GeometryBuffers createGeometryBuffers(
@@ -270,7 +281,7 @@ GeometryBuffers createGeometryBuffers(
 
 void destroyGeometryBuffers(
 	Device& _rDevice,
-	GeometryBuffers& _rGeometryBuffer)
+	_Out_ GeometryBuffers& _rGeometryBuffer)
 {
 	destroyBuffer(_rDevice, _rGeometryBuffer.meshletBuffer);
 	destroyBuffer(_rDevice, _rGeometryBuffer.meshletVerticesBuffer);

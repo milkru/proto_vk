@@ -4,36 +4,22 @@
 #include "shader_interop.h"
 
 static v2 getLookDirection(
-	GLFWwindow* _pWindow)
+	GLFWwindow* _pWindow,
+	Camera& _rCamera)
 {
-	v2 direction(0.0f, 0.0f);
-	v2 right(0.0f, 1.0f);
-	v2 up(1.0f, 0.0f);
-
-	if (glfwGetKey(_pWindow, GLFW_KEY_UP) == GLFW_PRESS)
+	if (!_rCamera.bPanning)
 	{
-		direction += up;
+		return {};
 	}
 
-	if (glfwGetKey(_pWindow, GLFW_KEY_DOWN) == GLFW_PRESS)
-	{
-		direction -= up;
-	}
+	dv2 cursorPosition;
+	glfwGetCursorPos(_pWindow, &cursorPosition.x, &cursorPosition.y);
 
-	if (glfwGetKey(_pWindow, GLFW_KEY_LEFT) == GLFW_PRESS)
-	{
-		direction -= right;
-	}
-
-	if (glfwGetKey(_pWindow, GLFW_KEY_RIGHT) == GLFW_PRESS)
-	{
-		direction += right;
-	}
-
-
+	v2 direction = cursorPosition - _rCamera.panOrigin;
 	if (glm::length(direction) != 0.0f)
 	{
 		direction = glm::normalize(direction);
+		direction = v2(direction.y, -direction.x);
 	}
 
 	return direction;
@@ -84,10 +70,26 @@ static v3 getMoveDirection(
 	return direction;
 }
 
+void updateCameraPanning(
+	GLFWwindow* _pWindow,
+	_Out_ Camera& _rCamera)
+{
+	if (glfwGetMouseButton(_pWindow, 0) == GLFW_PRESS)
+	{
+		_rCamera.bPanning = true;
+		glfwGetCursorPos(_pWindow, &_rCamera.panOrigin.x, &_rCamera.panOrigin.y);
+	}
+
+	if (glfwGetMouseButton(_pWindow, 0) == GLFW_RELEASE)
+	{
+		_rCamera.bPanning = false;
+	}
+}
+
 void updateCamera(
 	GLFWwindow* _pWindow,
 	f32 _deltaTime,
-	Camera& _rCamera)
+	_Out_ Camera& _rCamera)
 {
 	i32 framebufferWidth;
 	i32 framebufferHeight;
@@ -95,7 +97,7 @@ void updateCamera(
 
 	_rCamera.aspect = f32(framebufferWidth) / f32(framebufferHeight);
 
-	v2 lookDirection = getLookDirection(_pWindow);
+	v2 lookDirection = getLookDirection(_pWindow, _rCamera);
 	_rCamera.yaw += lookDirection.y * _deltaTime * _rCamera.sensitivity;
 	_rCamera.pitch += lookDirection.x * _deltaTime * _rCamera.sensitivity;
 	_rCamera.pitch = glm::clamp(_rCamera.pitch, -89.99f, 89.99f);
@@ -113,11 +115,13 @@ void updateCamera(
 
 	_rCamera.view = glm::lookAt(_rCamera.position, _rCamera.position + forward, up);
 	_rCamera.projection = getInfinitePerspectiveMatrix(glm::radians(_rCamera.fov), _rCamera.aspect, _rCamera.near);
+
+	updateCameraPanning(_pWindow, _rCamera);
 }
 
 void getFrustumPlanes(
 	Camera _camera,
-	v4* _pFrustumPlanes)
+	_Out_ v4* _pFrustumPlanes)
 {
 	m4 viewProjectionTransposed = glm::transpose(_camera.projection * _camera.view);
 

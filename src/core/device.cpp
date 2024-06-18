@@ -367,7 +367,7 @@ Device createDevice(
 }
 
 void destroyDevice(
-	Device& _rDevice)
+	_Out_ Device& _rDevice)
 {
 	vkDestroyCommandPool(_rDevice.device, _rDevice.commandPool, nullptr);
 

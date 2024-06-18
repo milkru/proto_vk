@@ -35,7 +35,7 @@ FramePacingState createFramePacingState(
 
 void destroyFramePacingState(
 	Device& _rDevice,
-	FramePacingState& _rFramePacingState)
+	_Out_ FramePacingState& _rFramePacingState)
 {
 	vkDestroySemaphore(_rDevice.device, _rFramePacingState.renderFinishedSemaphore, nullptr);
 	vkDestroySemaphore(_rDevice.device, _rFramePacingState.imageAvailableSemaphore, nullptr);
