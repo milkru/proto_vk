@@ -72,9 +72,10 @@ static v3 getMoveDirection(
 
 void updateCameraPanning(
 	GLFWwindow* _pWindow,
+	bool _bGuiHovered,
 	_Out_ Camera& _rCamera)
 {
-	if (glfwGetMouseButton(_pWindow, 0) == GLFW_PRESS)
+	if (glfwGetMouseButton(_pWindow, 0) == GLFW_PRESS && !_bGuiHovered)
 	{
 		_rCamera.bPanning = true;
 		glfwGetCursorPos(_pWindow, &_rCamera.panOrigin.x, &_rCamera.panOrigin.y);
@@ -89,6 +90,7 @@ void updateCameraPanning(
 void updateCamera(
 	GLFWwindow* _pWindow,
 	f32 _deltaTime,
+	bool _bGuiHovered,
 	_Out_ Camera& _rCamera)
 {
 	i32 framebufferWidth;
@@ -116,7 +118,7 @@ void updateCamera(
 	_rCamera.view = glm::lookAt(_rCamera.position, _rCamera.position + forward, up);
 	_rCamera.projection = getInfinitePerspectiveMatrix(glm::radians(_rCamera.fov), _rCamera.aspect, _rCamera.near);
 
-	updateCameraPanning(_pWindow, _rCamera);
+	updateCameraPanning(_pWindow, _bGuiHovered, _rCamera);
 }
 
 void getFrustumPlanes(

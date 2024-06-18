@@ -28,7 +28,7 @@ struct RawVertex
 #endif // VERTEX_COLOR
 };
 
-// TODO-MILKRU: Implement a more conservative way of calculating bounding sphere with good performance in mind
+#if 1
 static v4 calculateMeshBounds(
 	std::vector<RawVertex>& _rVertices)
 {
@@ -47,6 +47,28 @@ static v4 calculateMeshBounds(
 
 	return meshBounds;
 }
+#else
+static v4 calculateMeshBounds(
+	std::vector<RawVertex>& _rVertices)
+{
+	v3 _min = v3(FLT_MAX);
+	v3 _max = v3(FLT_MIN);
+
+	for (RawVertex& rVertex : _rVertices)
+	{
+		v3 position = v3(rVertex.position[0], rVertex.position[1], rVertex.position[2]);
+
+		_min = glm::min(_min, position);
+		_max = glm::max(_max, position);
+	}
+
+	v3 center = v3((_min.x + _max.x) * 0.5f, (_min.y + _max.y) * 0.5f, (_min.z + _max.z) * 0.5f);
+	v3 halfWidth = v3(abs(_max.x - center.x), abs(_max.y - center.y), abs(_max.z - center.z));
+	f32 radius = std::sqrt(std::pow(std::sqrt(std::pow(halfWidth.x, 2.0f) + std::pow(halfWidth.y, 2.0f)), 2.0f) + std::pow(halfWidth.z, 2.0f));
+
+	return v4(center, radius);
+}
+#endif
 
 static Vertex quantizeVertex(
 	RawVertex& _rRawVertex)

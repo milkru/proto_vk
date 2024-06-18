@@ -48,6 +48,8 @@ namespace gui
 		ImGuiIO& rIO = ImGui::GetIO();
 		Context& rContext = getContext();
 
+		rIO.Fonts->AddFontFromFileTTF("..//3rdparty//imgui//misc//fonts//DroidSans.ttf", 18.0f, NULL, rIO.Fonts->GetGlyphRangesDefault());
+
 		u8* pFontData;
 		i32 textureWidth;
 		i32 textureHeight;
@@ -304,6 +306,7 @@ namespace gui
 		ImGui::NewFrame();
 
 		ImGuiIO& rIO = ImGui::GetIO();
+		_rSettings.bGuiHovered = false;
 
 		{
 			static bool bWindowHovered = false;
@@ -314,6 +317,7 @@ namespace gui
 			ImGui::Begin("Performance", 0, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
 
 			bWindowHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_None);
+			_rSettings.bGuiHovered |= bWindowHovered;
 
 			ImGui::Text("Device: %s", _rSettings.deviceName);
 			ImGui::Separator();
@@ -360,12 +364,13 @@ namespace gui
 		{
 			static bool bWindowHovered = false;
 
-			ImGui::SetNextWindowPos(ImVec2(25, 370), ImGuiCond_FirstUseEver);
+			ImGui::SetNextWindowPos(ImVec2(25, 425), ImGuiCond_FirstUseEver);
 			ImGui::SetNextWindowBgAlpha(bWindowHovered ? 0.8f : 0.4f);
 
 			ImGui::Begin("Settings", 0, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
 
 			bWindowHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_None);
+			_rSettings.bGuiHovered |= bWindowHovered;
 
 			ImGui::Checkbox("Force Lod", &_rSettings.bEnableForceMeshLod);
 			ImGui::BeginDisabled(!_rSettings.bEnableForceMeshLod);

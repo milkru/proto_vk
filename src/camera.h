@@ -23,6 +23,7 @@ struct Camera
 void updateCamera(
 	GLFWwindow* _pWindow,
 	f32 _deltaTime,
+	bool _bGuiHovered,
 	_Out_ Camera& _rCamera);
 
 void getFrustumPlanes(

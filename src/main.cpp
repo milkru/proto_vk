@@ -410,7 +410,7 @@ i32 main(
 			f32 deltaTime = std::chrono::duration<f32, std::chrono::seconds::period>(currentTime - previousTime).count();
 			previousTime = currentTime;
 
-			updateCamera(pWindow, deltaTime, camera);
+			updateCamera(pWindow, deltaTime, settings.bGuiHovered, camera);
 
 			perFrameData.view = camera.view;
 			perFrameData.projection = camera.projection;

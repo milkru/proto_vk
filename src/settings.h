@@ -3,6 +3,7 @@
 struct Settings
 {
 	const char* deviceName = "Unknown Device";
+	bool bGuiHovered = false;
 	std::map<std::string, f64> gpuTimes;
 	u64 clippingInvocations = 0;
 	u64 deviceMemoryUsage = 0;
