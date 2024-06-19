@@ -37,10 +37,10 @@
 	path = 3rdparty/SPIRV-Reflect
 	url = https://github.com/KhronosGroup/SPIRV-Reflect.git
 	branch = main
-[submodule "3rdparty/meshoptimizer-cpp"]
-	path = 3rdparty/meshoptimizer-cpp
-	url = https://github.com/Traverse-Research/meshoptimizer-cpp
-	branch = vertex-lock
 [submodule "3rdparty/rapidjson"]
 	path = 3rdparty/rapidjson
 	url = https://github.com/Tencent/rapidjson.git
+[submodule "3rdparty/meshoptimizer"]
+	path = 3rdparty/meshoptimizer
+	url = https://github.com/zeux/meshoptimizer.git
+	branch = master

@@ -94,7 +94,6 @@ i32 main(
 		.bEnableSyncValidation = kbEnableSyncValidation });
 
 	Swapchain swapchain{};
-
 	Texture depthTexture{};
 
 	u32 hzbSize = 0;
@@ -165,7 +164,7 @@ i32 main(
 		.fov = 60.0f,
 		.aspect = f32(swapchain.extent.width) / f32(swapchain.extent.height),
 		.near = 0.01f,
-		.moveSpeed = 1.0f,
+		.moveSpeed = 1.5f,
 		.boostMoveSpeed = 5.0f,
 		.sensitivity = 300.0f };
 
@@ -174,12 +173,12 @@ i32 main(
 		.pEntry = "main" });
 
 	Shader taskShader = createShader(device, {
-			.pPath = "shaders/geometry.task.spv",
-			.pEntry = "main" });
+		.pPath = "shaders/geometry.task.spv",
+		.pEntry = "main" });
 
 	Shader meshShader = createShader(device, {
-			.pPath = "shaders/geometry.mesh.spv",
-			.pEntry = "main" });
+		.pPath = "shaders/geometry.mesh.spv",
+		.pEntry = "main" });
 
 	Shader fragShader = createShader(device, {
 		.pPath = "shaders/color.frag.spv",
@@ -192,19 +191,19 @@ i32 main(
 	Pipeline generateDrawsPipeline = createComputePipeline(device, generateDrawsShader);
 
 	Pipeline geometryPipeline = createGraphicsPipeline(device, {
-			.shaders = { taskShader, meshShader, fragShader },
-			.attachmentLayout = {
-				.colorAttachments = { {
-					.format = swapchain.format,
-					.bBlendEnable = false } },
-				.depthStencilFormat = { depthTexture.format }},
-			.rasterization = {
-				.cullMode = VK_CULL_MODE_BACK_BIT,
-				.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE },
-			.depthStencil = {
-				.bDepthTestEnable = true,
-				.bDepthWriteEnable = true,
-				.depthCompareOp = VK_COMPARE_OP_GREATER } });
+		.shaders = { taskShader, meshShader, fragShader },
+		.attachmentLayout = {
+			.colorAttachments = { {
+				.format = swapchain.format,
+				.bBlendEnable = false } },
+			.depthStencilFormat = { depthTexture.format }},
+		.rasterization = {
+			.cullMode = VK_CULL_MODE_BACK_BIT,
+			.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE },
+		.depthStencil = {
+			.bDepthTestEnable = true,
+			.bDepthWriteEnable = true,
+			.depthCompareOp = VK_COMPARE_OP_GREATER } });
 
 	Pipeline hzbDownsamplePipeline = createComputePipeline(device, hzbDownsampleShader);
 

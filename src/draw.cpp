@@ -49,7 +49,7 @@ DrawBuffers createDrawBuffers(
 			.pContents = perDrawDataVector.data() }),
 
 		.drawCommandsBuffer = createBuffer(_rDevice, {
-			.byteSize = 2 * sizeof(DrawCommand) * perDrawDataVector.size(),
+			.byteSize = sizeof(DrawCommand) * perDrawDataVector.size(),
 			.usage = VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT }),
 
 		.drawCountBuffer = createBuffer(_rDevice, {
@@ -61,8 +61,8 @@ DrawBuffers createDrawBuffers(
 			.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT }),
 
 		.meshletVisibilityBuffer = createBuffer(_rDevice, {
-				.byteSize = sizeof(u32) * u64(ceil(f32(meshletVisibilityBufferAllocator) / 32)), // Bit packing
-				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT }) };
+			.byteSize = sizeof(u32) * u64(ceil(f32(meshletVisibilityBufferAllocator) / 32)), // Bit packing
+			.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT }) };
 
 	immediateSubmit(_rDevice, [&](VkCommandBuffer _commandBuffer)
 		{

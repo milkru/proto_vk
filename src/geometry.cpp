@@ -9,11 +9,8 @@
 #include <meshoptimizer.h>
 
 // TODO-MILKRU: Dynamic LOD system
-// TODO-MILKRU: Task command submission
-// 
+// TODO-MILKRU: Task command submission?
 // TODO-MILKRU: Emulate task shaders in a compute shader? https://themaister.net/blog/2024/01/17/modernizing-granites-mesh-rendering/
-// TODO-MILKRU: Use meshopt_optimizeMeshlet once new meshoptimizer version is merged to vertex-lock branch
-// 
 // TODO-MILKRU: Implement Forward rendering with bindless, since overdraw with all of these geometry optimizations should be minimal. Check NSight overdraw view
 // TODO-MILKRU: Clustered light culling and binning. Check ACU, Doom and Doom Eternal implementations
 
@@ -28,7 +25,7 @@ struct RawVertex
 #endif // VERTEX_COLOR
 };
 
-#if 1
+// TODO-MILKRU: Implement `Welzl Algorithm` for more conservative bounding sphere?
 static v4 calculateMeshBounds(
 	std::vector<RawVertex>& _rVertices)
 {
@@ -47,28 +44,6 @@ static v4 calculateMeshBounds(
 
 	return meshBounds;
 }
-#else
-static v4 calculateMeshBounds(
-	std::vector<RawVertex>& _rVertices)
-{
-	v3 _min = v3(FLT_MAX);
-	v3 _max = v3(FLT_MIN);
-
-	for (RawVertex& rVertex : _rVertices)
-	{
-		v3 position = v3(rVertex.position[0], rVertex.position[1], rVertex.position[2]);
-
-		_min = glm::min(_min, position);
-		_max = glm::max(_max, position);
-	}
-
-	v3 center = v3((_min.x + _max.x) * 0.5f, (_min.y + _max.y) * 0.5f, (_min.z + _max.z) * 0.5f);
-	v3 halfWidth = v3(abs(_max.x - center.x), abs(_max.y - center.y), abs(_max.z - center.z));
-	f32 radius = std::sqrt(std::pow(std::sqrt(std::pow(halfWidth.x, 2.0f) + std::pow(halfWidth.y, 2.0f)), 2.0f) + std::pow(halfWidth.z, 2.0f));
-
-	return v4(center, radius);
-}
-#endif
 
 static Vertex quantizeVertex(
 	RawVertex& _rRawVertex)
@@ -143,21 +118,20 @@ void loadMesh(
 	for (u32 i = 0; i < objMesh->index_count; ++i)
 	{
 		fastObjIndex vertexIndex = objMesh->indices[i];
+		vertices.push_back({
+			.position = {
+				objMesh->positions[3 * size_t(vertexIndex.p) + 0],
+				objMesh->positions[3 * size_t(vertexIndex.p) + 1],
+				objMesh->positions[3 * size_t(vertexIndex.p) + 2] },
 
-		RawVertex vertex{};
+			.normal = {
+				0.5f + 0.5f * objMesh->normals[3 * size_t(vertexIndex.n) + 0],
+				0.5f + 0.5f * objMesh->normals[3 * size_t(vertexIndex.n) + 1],
+				0.5f + 0.5f * objMesh->normals[3 * size_t(vertexIndex.n) + 2] },
 
-		vertex.position[0] = objMesh->positions[3 * size_t(vertexIndex.p) + 0];
-		vertex.position[1] = objMesh->positions[3 * size_t(vertexIndex.p) + 1];
-		vertex.position[2] = objMesh->positions[3 * size_t(vertexIndex.p) + 2];
-
-		vertex.normal[0] = 0.5f + 0.5f * objMesh->normals[3 * size_t(vertexIndex.n) + 0];
-		vertex.normal[1] = 0.5f + 0.5f * objMesh->normals[3 * size_t(vertexIndex.n) + 1];
-		vertex.normal[2] = 0.5f + 0.5f * objMesh->normals[3 * size_t(vertexIndex.n) + 2];
-
-		vertex.texCoord[0] = objMesh->texcoords[2 * size_t(vertexIndex.t) + 0];
-		vertex.texCoord[1] = objMesh->texcoords[2 * size_t(vertexIndex.t) + 1];
-
-		vertices.push_back(vertex);
+			.texCoord = {
+				objMesh->texcoords[2 * size_t(vertexIndex.t) + 0],
+				objMesh->texcoords[2 * size_t(vertexIndex.t) + 1] } });
 	}
 	
 	std::vector<u32> remapTable(objMesh->index_count);
@@ -175,23 +149,18 @@ void loadMesh(
 	meshopt_optimizeVertexFetch(vertices.data(), indices.data(), indices.size(), vertices.data(), vertices.size(), sizeof(RawVertex));
 
 	v4 meshBounds = calculateMeshBounds(vertices);
+	Mesh mesh = {
+		.vertexOffset = u32(_rGeometry.vertices.size()),
+		.vertexCount = u32(vertices.size()),
+		.center = { meshBounds.x, meshBounds.y, meshBounds.z },
+		.radius = meshBounds.w,
+		.lodCount = 0 };
 
-	Mesh mesh = {};
-	mesh.center[0] = meshBounds.x;
-	mesh.center[1] = meshBounds.y;
-	mesh.center[2] = meshBounds.z;
-	mesh.radius = meshBounds.w;
-
-	mesh.vertexOffset = u32(_rGeometry.vertices.size());
-	mesh.vertexCount = u32(vertices.size());
 	_rGeometry.vertices.reserve(_rGeometry.vertices.size() + vertices.size());
-
 	for (RawVertex& rVertex : vertices)
 	{
 		_rGeometry.vertices.push_back(quantizeVertex(rVertex));
 	}
-
-	mesh.lodCount = 0;
 
 	for (u32 lodIndex = 0u; lodIndex < kMaxMeshLods; ++lodIndex)
 	{
@@ -220,25 +189,26 @@ void loadMesh(
 		u32 globalMeshletVerticesOffset = _rGeometry.meshletVertices.size();
 		u32 globalMeshletTrianglesOffset = _rGeometry.meshletTriangles.size();
 
-		_rGeometry.meshletVertices.insert(_rGeometry.meshletVertices.end(), meshletVertices.begin(), meshletVertices.end());
-		_rGeometry.meshletTriangles.insert(_rGeometry.meshletTriangles.end(), meshletTriangles.begin(), meshletTriangles.end());
 		_rGeometry.meshlets.reserve(_rGeometry.meshlets.size() + meshletCount);
-
 		for (u32 meshletIndex = 0; meshletIndex < meshlets.size(); ++meshletIndex)
 		{
-			meshopt_Meshlet& rMeshlet = meshlets[meshletIndex];
+			meshopt_Meshlet meshlet = meshlets[meshletIndex];
+			meshopt_optimizeMeshlet(meshletVertices.data() + meshlet.vertex_offset, meshletTriangles.data() + meshlet.triangle_offset,
+				meshlet.triangle_count, meshlet.vertex_count);
 
-			meshopt_Bounds bounds = meshopt_computeMeshletBounds(&meshletVertices[rMeshlet.vertex_offset], &meshletTriangles[rMeshlet.triangle_offset],
-				rMeshlet.triangle_count, &vertices[0].position[0], vertices.size(), sizeof(RawVertex));
+			meshopt_Bounds bounds = meshopt_computeMeshletBounds(&meshletVertices[meshlet.vertex_offset], &meshletTriangles[meshlet.triangle_offset],
+				meshlet.triangle_count, &vertices[0].position[0], vertices.size(), sizeof(RawVertex));
 
-			rMeshlet.vertex_offset += globalMeshletVerticesOffset;
-			rMeshlet.triangle_offset += globalMeshletTrianglesOffset;
+			meshlet.vertex_offset += globalMeshletVerticesOffset;
+			meshlet.triangle_offset += globalMeshletTrianglesOffset;
 
-			_rGeometry.meshlets.push_back(buildMeshlet(rMeshlet, bounds));
+			_rGeometry.meshlets.push_back(buildMeshlet(meshlet, bounds));
 		}
 
-		++mesh.lodCount;
+		_rGeometry.meshletVertices.insert(_rGeometry.meshletVertices.end(), meshletVertices.begin(), meshletVertices.end());
+		_rGeometry.meshletTriangles.insert(_rGeometry.meshletTriangles.end(), meshletTriangles.begin(), meshletTriangles.end());
 
+		++mesh.lodCount;
 		if (lodIndex >= kMaxMeshLods - 1)
 		{
 			break;
@@ -261,7 +231,6 @@ void loadMesh(
 	}
 
 	_rGeometry.meshes.push_back(mesh);
-
 	trySerializeMesh(_pFilePath, mesh, _rGeometry);
 }
 
@@ -271,19 +240,19 @@ GeometryBuffers createGeometryBuffers(
 {
 	return {
 		.meshletBuffer = createBuffer(_rDevice, {
-				.byteSize = sizeof(Meshlet) * _rGeometry.meshlets.size(),
-				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-				.pContents = _rGeometry.meshlets.data() }),
+			.byteSize = sizeof(Meshlet) * _rGeometry.meshlets.size(),
+			.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+			.pContents = _rGeometry.meshlets.data() }),
 
 		.meshletVerticesBuffer = createBuffer(_rDevice, {
-				.byteSize = sizeof(u32) * _rGeometry.meshletVertices.size(),
-				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-				.pContents = _rGeometry.meshletVertices.data() }),
+			.byteSize = sizeof(u32) * _rGeometry.meshletVertices.size(),
+			.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+			.pContents = _rGeometry.meshletVertices.data() }),
 
 		.meshletTrianglesBuffer = createBuffer(_rDevice, {
-				.byteSize = sizeof(u8) * _rGeometry.meshletTriangles.size(),
-				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-				.pContents = _rGeometry.meshletTriangles.data() }),
+			.byteSize = sizeof(u8) * _rGeometry.meshletTriangles.size(),
+			.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+			.pContents = _rGeometry.meshletTriangles.data() }),
 
 		.vertexBuffer = createBuffer(_rDevice, {
 			.byteSize = sizeof(Vertex) * _rGeometry.vertices.size(),
@@ -333,7 +302,7 @@ if (_bMeshShadingSupported)
 			find_borders(meshlets);
 
 			// simplify the merged meshlet
-			simplify(meshlet);
+			simplify(meshlet); // TODO-MILKRU: Use `meshopt_SimplifyLockBorder`
 
 			// split the simplified meshlet
 			auto parts = split(meshlet);

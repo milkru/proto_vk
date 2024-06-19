@@ -72,10 +72,9 @@ target_link_libraries(${PROJECT_NAME} PRIVATE volk)
 
 set_property(TARGET volk PROPERTY FOLDER "3rdparty")
 
-# Temporarily using this repo until vertex locking feature comes to the original repo
-message("Adding meshoptimizer-cpp:")
+message("Adding meshoptimizer:")
 
-set(MESHOPTIMIZER_DIR 3rdparty/meshoptimizer-cpp)
+set(MESHOPTIMIZER_DIR 3rdparty/meshoptimizer)
 
 add_subdirectory(${MESHOPTIMIZER_DIR})
 target_include_directories(${PROJECT_NAME} PRIVATE ${MESHOPTIMIZER_DIR}/src)
