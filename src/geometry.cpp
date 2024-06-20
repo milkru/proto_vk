@@ -287,27 +287,27 @@ if (_bMeshShadingSupported)
 {
 	auto meshlets = generateMeshlets(mesh);
 
-	// and put them as leaf nodes in the dag
+	// And put them as leaf nodes in the DAG
 	dag.add_leafs(meshlets);
 
-	// iteratively merge-simplify-split
+	// Iteratively merge-simplify-split
 	while (we can group meshlets)
 	{
 		for (group in partition(meshlets))
 		{
-			// merge the meshlets in the group
+			// Merge the meshlets in the group
 			auto meshlet = merge(group);
 
-			// track all the borders between the meshlets
+			// Track all the borders between the meshlets
 			find_borders(meshlets);
 
-			// simplify the merged meshlet
+			// Simplify the merged meshlet
 			simplify(meshlet); // TODO-MILKRU: Use `meshopt_SimplifyLockBorder`
 
-			// split the simplified meshlet
+			// Split the simplified meshlet
 			auto parts = split(meshlet);
 
-			// write the result to the dag
+			// Write the result to the DAG
 			dag.add_parents(group, parts);
 		}
 	}

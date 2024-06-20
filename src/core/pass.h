@@ -23,8 +23,6 @@ typedef std::initializer_list<Attachment> Attachments;
 
 union Binding
 {
-	// TODO-MILKRU: VK_EXT_descriptor_buffer should provide descriptorBufferImageLayoutIgnored
-	// Then you can use implicit constructors here
 	Binding(Texture& _rTexture, VkImageLayout _layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	Binding(Buffer& _rBuffer);
 
